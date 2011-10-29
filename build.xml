@@ -1,0 +1,26 @@
+<project name="hdfs-file-slurper" default="jar">
+    <target name="clean">
+        <delete dir="build"/>
+        <delete dir="dist"/>
+    </target>
+
+    <target name="compile">
+        <mkdir dir="build/classes"/>
+        <path id="lib.path.ref">
+            <fileset dir="lib" includes="*.jar"/>
+        </path>
+        <javac srcdir="src" destdir="build/classes">
+             <classpath refid="lib.path.ref"/>
+        </javac>
+    </target>
+
+    <target name="jar" depends="compile">
+        <mkdir dir="dist/lib"/>
+        <jar destfile="dist/lib/hdfs-file-slurper-1.0.jar" basedir="build/classes">
+            <manifest>
+                <attribute name="Main-Class" value="com.alexholmes.hdfsslurper.Slurper"/>
+            </manifest>
+        </jar>
+    </target>
+
+</project>
