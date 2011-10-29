@@ -1,4 +1,4 @@
-A simple utility to upload files from a local file system into HDFS
+A simple utility to copy files from a local file system into HDFS
 ===================================================================
 
 ## Motivation
