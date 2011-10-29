@@ -47,10 +47,19 @@ To get started, simply:
 4. Set the `JAVA_HOME` environment variable
 5. Run!
 
+Example environment settings:
+
+<pre><code>
+# CDH Hadoop configuration directory
+export HADOOP_CONF_DIR=/etc/hadoop/conf
+
+# RedHat default java home
+export JAVA_HOME=/usr/java/latest
+</code></pre>
+
 To see all the options available:
 
 <pre><code>
-export HADOOP_CONF_DIR=/etc/hadoop/conf
 usage: Slurper [-c <arg>] [-d] [-i <arg>] [-n] [-o <arg>] [-r] -s <arg>
        [-t <arg>]
  -c,--compress <arg>      The compression codec class (Optional)
