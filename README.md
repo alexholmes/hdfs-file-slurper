@@ -78,7 +78,7 @@ for line in sys.stdin:
 And you would use it as follows:
 
 <pre><code>
-bin/hdfs-file-slurper.sh --sourcedir test --completedir test2 --script "/app/test.py"
+bin/hdfs-file-slurper.sh --sourcedir /app --completedir /completed --script "/app/test.py"
 </code></pre>
 
 You can also choose to compress the HDFS output file with the "--compress" option, which takes a Hadoop CompressionCodec
