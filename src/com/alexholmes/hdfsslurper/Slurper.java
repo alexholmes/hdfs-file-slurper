@@ -38,6 +38,7 @@ public class Slurper {
     private String script;
     private boolean remove;
     private boolean dryRun;
+    private boolean doneFile;
     FileSystem hdfsFs;
     Options options = new Options();
 
@@ -67,6 +68,7 @@ public class Slurper {
         //
         options.addOption("c", "compress", true, "The compression codec class (Optional)");
         options.addOption("d", "dryrun", false, "Perform a dry run - do not actually copy the files into HDFS (Optional)");
+        options.addOption("n", "donefile", false, "Touch a file in HDFS after the file copy process has completed.  The done filename is the HDFS target file appended with \".done\" (Optional)");
 
         // mutually exclusive arguments.  one of them must be defined
         //
@@ -102,6 +104,7 @@ public class Slurper {
         }
         remove = commandLine.hasOption("remove");
         dryRun = commandLine.hasOption("dryrun");
+        doneFile = commandLine.hasOption("donefile");
 
         if(dryRun) {
             log.info("Dry-run mode, no files will be copied");
@@ -269,6 +272,16 @@ public class Slurper {
                 log.warn("Failed to move file from '" + file.getAbsolutePath() + "' to '" + dest.getAbsolutePath() + "'");
             }
         }
+
+        if(doneFile) {
+            Path doneFile = new Path(targetHdfsFile.getParent(), targetHdfsFile.getName() + ".done");
+            log.info("Touching done file " + doneFile);
+            touch(doneFile);
+        }
+    }
+
+    private void touch(Path p) throws IOException {
+        hdfsFs.create(p).close();
     }
 
     private Path getHdfsTargetPath(File localSrc) throws IOException {

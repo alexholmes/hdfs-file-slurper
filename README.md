@@ -17,6 +17,7 @@ and all files are copied into that location.
 * Destination HDFS files can be compressed as part of the write codec with any compression codec which extends `org.apache.hadoop.io.compress.CompressionCodec`.
 * A dry-run mode which will simply echo the copy operations, but not execute them.
 * Cron/scheduler support by use of a PID file to prevent from multiple concurrent execution.
+* Capability to write "done" file after completion of copy
 
 ## Important Considerations
 
@@ -49,9 +50,8 @@ To see all the options available:
 
 <pre><code>
 export HADOOP_CONF_DIR=/etc/hadoop/conf
-bin/hdfs-file-slurper.sh
-usage: Slurper [-c <arg>] [-d] [-i <arg>] [-o <arg>] [-r] -s <arg> [-t
-       <arg>]
+usage: Slurper [-c <arg>] [-d] [-i <arg>] [-n] [-o <arg>] [-r] -s <arg>
+       [-t <arg>]
  -c,--compress <arg>      The compression codec class (Optional)
  -d,--dryrun              Perform a dry run - do not actually copy the
                           files into HDFS (Optional)
@@ -61,6 +61,9 @@ usage: Slurper [-c <arg>] [-d] [-i <arg>] [-o <arg>] [-r] -s <arg> [-t
                           and the script must put the HDFS target full
                           path on standard output. Either this or the
                           "hdfsdif" option must be set.
+ -n,--donefile            Touch a file in HDFS after the file copy process
+                          has completed.  The done filename is the HDFS
+                          target file appended with ".done" (Optional)
  -o,--completedir <arg>   Local filesystem completion directory where file
                           is moved after successful copy into HDFS.
                           Either this or the "remove" option must be set.
