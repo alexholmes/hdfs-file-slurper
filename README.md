@@ -97,7 +97,7 @@ bin/hdfs-file-slurper.sh --sourcedir /app --hdfsdir /app2 --completedir /complet
 
 ### Fine-grained control over HDFS file destinations
 
-If you want to have control over a file-by-file basis as to the destination HDFS directory and file, use the
+If you want to have control on a file-by-file basis as to the destination HDFS directory and file, use the
 "--script" option to specify a local executable script.  The local filename will be supplied to the standard input
 of the script, and the script should produce the target HDFS destination file on standard output as a single line.
 
