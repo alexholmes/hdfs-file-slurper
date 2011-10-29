@@ -55,7 +55,7 @@ usage: Slurper [-c <arg>] [-d] [-i <arg>] [-o <arg>] [-r] -s <arg> [-t
 To run in dryrun mode, and to see what files would be copied from a local directory "/app" into a "/app2" directory in HDFS:
 
 <pre><code>
-bin/hdfs-file-slurper.sh /app --hdfsdir /app2 --completedir /completed --dryrun
+bin/hdfs-file-slurper.sh --sourcedir /app --hdfsdir /app2 --completedir /completed --dryrun
 </code></pre>
 
 Simply remove the "--dryrun" option to actually perform the copy.  After a file is copied into HDFS there are two options,
