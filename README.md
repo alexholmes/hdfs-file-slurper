@@ -38,10 +38,10 @@ Apache licensed.
 
 To get started, simply:
 
-# Download, and run ant
-# Tarball the directory and copy to a machine that has access to Hadoop, and untar.
-# Set the `HADOOP_CONF_DIR` environment variable to refer to your Hadoop configuration directory.
-# Run!
+1. Download, and run ant
+2. Tarball the directory and copy to a machine that has access to Hadoop, and untar.
+3. Set the `HADOOP_CONF_DIR` environment variable to refer to your Hadoop configuration directory.
+4. Run!
 
 To see all the options available:
 
