@@ -14,16 +14,18 @@ into another directory.
 * It is extensible in that you can tell it to call a script for every local file to determine the
 HDFS location of the destination file.  Or alternatively let the utility know a single HDFS target directory
 and all files are copied into that location.
-* Destination HDFS files can be compressed as part of the write codec with any compression codec which extends `org.apache.hadoop.io.compress.CompressionCodec`
-* A dry-run mode which will simply echo the copy operations, but not execute them
-* Cron/scheduler support by use of a PID file to prevent from multiple concurrent execution
+* Destination HDFS files can be compressed as part of the write codec with any compression codec which extends `org.apache.hadoop.io.compress.CompressionCodec`.
+* A dry-run mode which will simply echo the copy operations, but not execute them.
+* Cron/scheduler support by use of a PID file to prevent from multiple concurrent execution.
 
-## Notes
+## Important Considerations
 
 When using this utility, as well as in general when dealing with the automated ingress of files into HDFS, it's probably
 worth bearing the following items in mind.
 
-* Make sure your filenames are globally unique to avoid name collisions in HDFS
+* Files must be moved into the local source directory, which is an atomic operation in Linux.  If files are copied or
+written to directly in the local source directory the result of the slurper is undetermined.
+* Make sure your filenames are globally unique to avoid name collisions in HDFS.
 * Ideally write a custom script to map the local files into HDFS directories using a data partitioning scheme that makes
  sense for your data.  For example if you are moving log files into HDFS, then you may want to extract the date/time from
  the filename and write all files for a given day into a separate directory.
