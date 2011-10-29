@@ -268,10 +268,13 @@ public class Slurper {
             IOUtils.closeStream(os);
         }
 
-        if (codec == null && file.length() != hdfsFs.getFileStatus(targetHdfsFile).getLen()) {
-            throw new IOException("File sizes don't match, local = " + file.length() + ", HDFS = " +
-                    hdfsFs.getFileStatus(targetHdfsFile).getLen());
+        long localFileSize = file.length();
+        long hdfsFileSize = hdfsFs.getFileStatus(targetHdfsFile).getLen();
+        if (codec == null && localFileSize != hdfsFileSize) {
+            throw new IOException("File sizes don't match, local = " + localFileSize + ", HDFS = " + hdfsFileSize);
         }
+
+        log.info("Local file size = " + localFileSize + ", HDFS file size = " + hdfsFileSize);
 
         if (verify) {
             verify(targetHdfsFile, crc.getValue());
