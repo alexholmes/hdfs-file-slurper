@@ -44,7 +44,8 @@ To get started, simply:
 1. Download, and run ant
 2. Tarball the directory and copy to a machine that has access to Hadoop, and untar.
 3. Set the `HADOOP_CONF_DIR` environment variable to refer to your Hadoop configuration directory.
-4. Run!
+4. Set the `JAVA_HOME` environment variable
+5. Run!
 
 To see all the options available:
 

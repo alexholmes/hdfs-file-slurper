@@ -21,7 +21,12 @@ fi
 
 
 if [ -z "$HADOOP_CONF_DIR" ]; then
-  echo "HADOOP_CONF_DIR must be defined and refer to your Hadoop config directory"
+  echo "HADOOP_CONF_DIR must be set and refer to your Hadoop config directory"
+  exit 2;
+fi
+
+if [ -z "$JAVA_HOME" ]; then
+  echo "JAVA_HOME must be set"
   exit 2;
 fi
 
