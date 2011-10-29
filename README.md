@@ -49,8 +49,7 @@ To get started, simply:
 
 Example environment settings:
 
-<pre><code>
-# CDH Hadoop configuration directory
+<pre><code># CDH Hadoop configuration directory
 export HADOOP_CONF_DIR=/etc/hadoop/conf
 
 # RedHat default java home
@@ -59,8 +58,7 @@ export JAVA_HOME=/usr/java/latest
 
 To see all the options available:
 
-<pre><code>
-usage: Slurper [-c <arg>] [-d] [-i <arg>] [-n] [-o <arg>] [-r] -s <arg>
+<pre><code>usage: Slurper [-c <arg>] [-d] [-i <arg>] [-n] [-o <arg>] [-r] -s <arg>
        [-t <arg>]
  -c,--compress <arg>      The compression codec class (Optional)
  -d,--dryrun              Perform a dry run - do not actually copy the
@@ -89,8 +87,7 @@ usage: Slurper [-c <arg>] [-d] [-i <arg>] [-n] [-o <arg>] [-r] -s <arg>
 
 To run in dryrun mode, and to see what files would be copied from a local directory "/app" into a "/app2" directory in HDFS:
 
-<pre><code>
-bin/hdfs-file-slurper.sh --sourcedir /app --hdfsdir /app2 --completedir /completed --dryrun
+<pre><code>bin/hdfs-file-slurper.sh --sourcedir /app --hdfsdir /app2 --completedir /completed --dryrun
 </code></pre>
 
 Simply remove the "--dryrun" option to actually perform the copy.  After a file is copied into HDFS there are two options,
@@ -105,8 +102,7 @@ class.  The default behavior is to append the codec-specific extension to the en
 you don't want this to occur, you must provide a script and specify an alternative HDFS filename.
 For example to use the default (DEFLATE) compression codec in Hadoop, you would:
 
-<pre><code>
-bin/hdfs-file-slurper.sh --sourcedir /app --hdfsdir /app2 --completedir /completed \
+<pre><code>bin/hdfs-file-slurper.sh --sourcedir /app --hdfsdir /app2 --completedir /completed \
 --compress org.apache.hadoop.io.compress.DefaultCodec
 </code></pre>
 
@@ -119,8 +115,7 @@ of the script, and the script should produce the target HDFS destination file on
 For example, this is a simple Python script which uses the date in the filename to partition files into separate
 directories in HDFS by date.
 
-<pre><code>
-#!/usr/bin/python
+<pre><code>#!/usr/bin/python
 
 import sys, os, re
 
@@ -142,8 +137,7 @@ print hdfs_dest,
 
 And you would use it as follows:
 
-<pre><code>
-touch /app/apache-2011-02-02.log
+<pre><code>touch /app/apache-2011-02-02.log
 bin/hdfs-file-slurper.sh --sourcedir /app --completedir /completed --script "/app/test.py"
 INFO hdfsslurper.Slurper: Copying local file '/app/apache-2011-02-02.log' to HDFS location '/data/2011-02-02/apache-2011-02-02.log
 </code></pre>
