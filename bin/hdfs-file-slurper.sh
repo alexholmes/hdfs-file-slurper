@@ -4,8 +4,21 @@
 #
 
 # get the current directory
+script=`basename "$0"`
 bin=`dirname "$0"`
 bin=`cd "$bin">/dev/null; pwd`
+
+pidfile=$bin/$script.pid
+
+if [ -f "$pidfile" ]; then
+  pid=`cat $pidfile`
+  if [ -d "/proc/$pid" ]; then
+    echo "PID file $pidfile exists and PID $pid is running"
+    exit 1
+  fi
+  echo "Pid file $pidfile exists but PID $pid no longer seems to be running, ignoring PID file"
+fi
+
 
 if [ -z "$HADOOP_CONF_DIR" ]; then
   echo "HADOOP_CONF_DIR must be defined and refer to your Hadoop config directory"
@@ -22,4 +35,16 @@ fi
 JAVA=$JAVA_HOME/bin/java
 JAVA_HEAP_MAX=-Xmx512m
 
-"$JAVA" $JAVA_HEAP_MAX -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@"
+"$JAVA" $JAVA_HEAP_MAX -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" &
+pid=$!
+echo $pid > $pidfile
+
+wait $pid
+
+exitCode=$?
+
+if [ -f "$pidfile" ]; then
+  rm $pidfile
+fi
+
+exit $exitCode

@@ -47,7 +47,7 @@ public class ScriptExecutor {
             throw new IOException("Watchdog had to kill script process");
         }
 
-        String hdfsTargetFile = baos.toString();
+        String hdfsTargetFile = StringUtils.trim(baos.toString());
 
         if(StringUtils.isBlank(hdfsTargetFile)) {
             throw new IOException("Received empty HDFS destination file from script");
