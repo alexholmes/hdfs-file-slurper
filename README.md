@@ -18,6 +18,7 @@ and all files are copied into that location.
 * A dry-run mode which will simply echo the copy operations, but not execute them.
 * Cron/scheduler support by use of a PID file to prevent from multiple concurrent execution.
 * Capability to write "done" file after completion of copy
+* Verify HDFS destination post-copy with CRC32 checksum comparison with source
 
 ## Important Considerations
 
@@ -43,23 +44,23 @@ To get started, simply:
 
 1. Download, and run ant
 2. Tarball the directory and copy to a machine that has access to Hadoop, and untar.
-3. Set the `HADOOP_CONF_DIR` environment variable to refer to your Hadoop configuration directory.
-4. Set the `JAVA_HOME` environment variable
+3. Set the `HADOOP_BIN` environment variable to refer to your local hadoop script.
+4. Copy `lib/commons-exec-1.1.jar` to your Hadoop lib directory, or update `hadoop-env.sh` and add it to your `HADOOP_CLASSPATH`
 5. Run!
 
-Example environment settings:
+Example environment setup:
 
-<pre><code># CDH Hadoop configuration directory
-export HADOOP_CONF_DIR=/etc/hadoop/conf
+<pre><code># CDH hadoop script location
+export HADOOP_BIN=/usr/bin/hadoop
 
-# RedHat default java home
-export JAVA_HOME=/usr/java/latest
+# Copy third-party JAR into CDH Hadoop lib directory
+sudo cp  lib/commons-exec-1.1.jar /usr/lib/hadoop/lib/
 </code></pre>
 
 To see all the options available:
 
 <pre><code>usage: Slurper [-c <arg>] [-d] [-i <arg>] [-n] [-o <arg>] [-r] -s <arg>
-       [-t <arg>]
+       [-t <arg>] [-v]
  -c,--compress <arg>      The compression codec class (Optional)
  -d,--dryrun              Perform a dry run - do not actually copy the
                           files into HDFS (Optional)
@@ -83,6 +84,10 @@ To see all the options available:
  -t,--hdfsdir <arg>       HDFS target directory where files should be
                           copied. Either this or the "script" option must
                           be set.
+ -v,--verify              Verify the file after it has been copied into
+                          HDFS.  This is slow as it involves reading the
+                          entire file from HDFS. (Optional)
+
 </code></pre>
 
 To run in dryrun mode, and to see what files would be copied from a local directory "/app" into a "/app2" directory in HDFS:

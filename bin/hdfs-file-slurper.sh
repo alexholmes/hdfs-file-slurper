@@ -19,28 +19,13 @@ if [ -f "$pidfile" ]; then
   echo "Pid file $pidfile exists but PID $pid no longer seems to be running, ignoring PID file"
 fi
 
-
-if [ -z "$HADOOP_CONF_DIR" ]; then
-  echo "HADOOP_CONF_DIR must be set and refer to your Hadoop config directory"
+if [ -z "$HADOOP_BIN" ]; then
+  echo "HADOOP_BIN must be set"
   exit 2;
 fi
 
-if [ -z "$JAVA_HOME" ]; then
-  echo "JAVA_HOME must be set"
-  exit 2;
-fi
+"$HADOOP_BIN" jar ${bin}/../dist/lib/* com.alexholmes.hdfsslurper.Slurper  "$@" &
 
-CLASSPATH="${HADOOP_CONF_DIR}:$bin/../dist/lib/*:$bin/../lib/*"
-
-# add classes first, triggers log4j.properties priority
-if [ -d "${bin}/../target/classes" ]; then
-  CLASSPATH=${CLASSPATH}:${bin}/../target/classes
-fi
-
-JAVA=$JAVA_HOME/bin/java
-JAVA_HEAP_MAX=-Xmx512m
-
-"$JAVA" $JAVA_HEAP_MAX -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" &
 pid=$!
 echo $pid > $pidfile
 

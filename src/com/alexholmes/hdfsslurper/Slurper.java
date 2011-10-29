@@ -17,6 +17,7 @@
 package com.alexholmes.hdfsslurper;
 
 import org.apache.commons.cli.*;
+import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -24,9 +25,12 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.util.ReflectionUtils;
 
 import java.io.*;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.CRC32;
+import java.util.zip.CheckedInputStream;
 
 public class Slurper {
     private static Log log = LogFactory.getLog(Slurper.class);
@@ -39,8 +43,10 @@ public class Slurper {
     private boolean remove;
     private boolean dryRun;
     private boolean doneFile;
+    private boolean verify;
     FileSystem hdfsFs;
     Options options = new Options();
+    Configuration config = new Configuration();
 
     private void printUsageAndExit(Options options, int exitCode) {
         HelpFormatter formatter = new HelpFormatter();
@@ -69,11 +75,12 @@ public class Slurper {
         options.addOption("c", "compress", true, "The compression codec class (Optional)");
         options.addOption("d", "dryrun", false, "Perform a dry run - do not actually copy the files into HDFS (Optional)");
         options.addOption("n", "donefile", false, "Touch a file in HDFS after the file copy process has completed.  The done filename is the HDFS target file appended with \".done\" (Optional)");
+        options.addOption("v", "verify", false, "Verify the file after it has been copied into HDFS.  This is slow as it involves reading the entire file from HDFS. (Optional)");
 
         // mutually exclusive arguments.  one of them must be defined
         //
         options.addOption("t", "hdfsdir", true, "HDFS target directory where files should be copied. " +
-            "Either this or the \"script\" option must be set.");
+                "Either this or the \"script\" option must be set.");
         options.addOption("i", "script", true, "A shell script which can be called to determine the HDFS target directory." +
                 "The standard input will contain a single line with the source file, and the script must put the HDFS " +
                 "target full path on standard output. Either this or the \"hdfsdif\" option must be set.");
@@ -100,26 +107,28 @@ public class Slurper {
         localSourceDir = new File(commandLine.getOptionValue("sourcedir"));
         localCompleteDir = new File(commandLine.getOptionValue("completedir"));
         if (commandLine.hasOption("compress")) {
-            codec = (CompressionCodec) Class.forName(commandLine.getOptionValue("compress")).newInstance();
+            codec = (CompressionCodec)
+                    ReflectionUtils.newInstance(Class.forName(commandLine.getOptionValue("compress")), config);
         }
         remove = commandLine.hasOption("remove");
         dryRun = commandLine.hasOption("dryrun");
         doneFile = commandLine.hasOption("donefile");
+        verify = commandLine.hasOption("verify");
 
-        if(dryRun) {
+        if (dryRun) {
             log.info("Dry-run mode, no files will be copied");
         }
 
         // make sure one of these has been set
         //
-        if(!commandLine.hasOption("remove") && !commandLine.hasOption("completedir")) {
+        if (!commandLine.hasOption("remove") && !commandLine.hasOption("completedir")) {
             log.error("One of \"remove\" or \"completedir\" must be set");
             printUsageAndExit(options, 4);
         }
 
         // make sure ONLY one of these has been set
         //
-        if(commandLine.hasOption("remove") && commandLine.hasOption("completedir")) {
+        if (commandLine.hasOption("remove") && commandLine.hasOption("completedir")) {
             log.error("Only one of \"remove\" or \"completedir\" can be set");
             printUsageAndExit(options, 5);
         }
@@ -129,20 +138,20 @@ public class Slurper {
 
         // make sure one of these has been set
         //
-        if(!commandLine.hasOption("hdfsdir") && !commandLine.hasOption("script")) {
+        if (!commandLine.hasOption("hdfsdir") && !commandLine.hasOption("script")) {
             log.error("One of \"hdfsdir\" or \"script\" must be set");
             printUsageAndExit(options, 4);
         }
 
         // make sure ONLY one of these has been set
         //
-        if(commandLine.hasOption("hdfsdir") && commandLine.hasOption("script")) {
+        if (commandLine.hasOption("hdfsdir") && commandLine.hasOption("script")) {
             log.error("Only one of \"hdfsdir\" or \"script\" can be set");
             printUsageAndExit(options, 5);
         }
 
 
-        if(commandLine.hasOption("hdfsdir")) {
+        if (commandLine.hasOption("hdfsdir")) {
             hdfsDestDir = new Path(commandLine.getOptionValue("hdfsdir"));
         } else {
             script = commandLine.getOptionValue("script");
@@ -199,7 +208,7 @@ public class Slurper {
         int successCopy = 0;
         int errorCopy = 0;
         for (File file : localSourceDir.listFiles()) {
-            if(file.isFile()) {
+            if (file.isFile()) {
                 try {
                     process(file);
                     successCopy++;
@@ -209,7 +218,7 @@ public class Slurper {
                 }
             }
         }
-        if(!dryRun) {
+        if (!dryRun) {
             log.info("Completed with " + successCopy + " successful copies, and " + errorCopy + " copy errors");
         }
     }
@@ -239,10 +248,14 @@ public class Slurper {
 
         // copy the file
         //
-        BufferedInputStream is = null;
+        InputStream is = null;
         OutputStream os = null;
+        CRC32 crc = new CRC32();
         try {
             is = new BufferedInputStream(new FileInputStream(file));
+            if(verify) {
+                is = new CheckedInputStream(is, crc);
+            }
             os = hdfsFs.create(targetHdfsFile);
 
             if (codec != null) {
@@ -255,29 +268,59 @@ public class Slurper {
             IOUtils.closeStream(os);
         }
 
-        if(file.length() != hdfsFs.getFileStatus(targetHdfsFile).getLen()) {
+        if (codec == null && file.length() != hdfsFs.getFileStatus(targetHdfsFile).getLen()) {
             throw new IOException("File sizes don't match, local = " + file.length() + ", HDFS = " +
-            hdfsFs.getFileStatus(targetHdfsFile).getLen());
+                    hdfsFs.getFileStatus(targetHdfsFile).getLen());
+        }
+
+        if (verify) {
+            verify(targetHdfsFile, crc.getValue());
         }
 
         // remove or move the file away from the source directory
         //
-        if(remove) {
-            if(!file.delete()) {
+        if (remove) {
+            if (!file.delete()) {
                 log.warn("Failed to delete file '" + file.getAbsolutePath() + "'");
             }
         } else {
             File dest = new File(localCompleteDir, file.getName());
-            if(!file.renameTo(dest)) {
+            if (!file.renameTo(dest)) {
                 log.warn("Failed to move file from '" + file.getAbsolutePath() + "' to '" + dest.getAbsolutePath() + "'");
             }
         }
 
-        if(doneFile) {
+        if (doneFile) {
             Path doneFile = new Path(targetHdfsFile.getParent(), targetHdfsFile.getName() + ".done");
             log.info("Touching done file " + doneFile);
             touch(doneFile);
         }
+    }
+
+    private void verify(Path hdfs, long localFileCRC) throws IOException {
+        log.info("Verifying files");
+        long hdfsCRC = hdfsFileCRC32(hdfs);
+
+        if(localFileCRC != hdfsCRC) {
+            throw new IOException("CRC's don't match, local file is " + localFileCRC + " HDFS file is " + hdfsCRC);
+        }
+        log.info("CRC's match (" + localFileCRC + ")");
+    }
+
+    private long hdfsFileCRC32(Path path) throws IOException {
+        InputStream in = null;
+        CRC32 crc = new CRC32();
+        try {
+            InputStream is = new BufferedInputStream(hdfsFs.open(path));
+            if (codec != null) {
+                is = codec.createInputStream(is);
+            }
+            in = new CheckedInputStream(is, crc);
+            org.apache.commons.io.IOUtils.copy(in, new NullOutputStream());
+        } finally {
+            org.apache.commons.io.IOUtils.closeQuietly(in);
+        }
+        return crc.getValue();
     }
 
     private void touch(Path p) throws IOException {
@@ -285,8 +328,8 @@ public class Slurper {
     }
 
     private Path getHdfsTargetPath(File localSrc) throws IOException {
-        if(hdfsDestDir != null) {
-            if(codec != null) {
+        if (hdfsDestDir != null) {
+            if (codec != null) {
                 return new Path(hdfsDestDir, localSrc.getName() + codec.getDefaultExtension());
             } else {
                 return new Path(hdfsDestDir, localSrc.getName());
