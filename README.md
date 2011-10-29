@@ -135,5 +135,6 @@ And you would use it as follows:
 <pre><code>
 touch /app/apache-2011-02-02.log
 bin/hdfs-file-slurper.sh --sourcedir /app --completedir /completed --script "/app/test.py"
+INFO hdfsslurper.Slurper: Copying local file '/app/apache-2011-02-02.log' to HDFS location '/data/2011-02-02/apache-2011-02-02.log
 </code></pre>
 
