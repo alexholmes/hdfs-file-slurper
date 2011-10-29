@@ -20,7 +20,6 @@ public class Slurper {
     private File localCompleteDir;
     private Path hdfsDestDir;
     private String script;
-    private boolean verify;
     private boolean remove;
     private boolean dryRun;
     FileSystem hdfsFs;
@@ -47,21 +46,26 @@ public class Slurper {
         // required arguments
         //
         options.addOption(createRequiredOption("s", "sourcedir", true, "Local filesystem source directory for files to be copied into HDFS"));
-        options.addOption(createRequiredOption("o", "completedir", true, "Local filesystem completion directory where file is moved after successful copy into HDFS"));
 
         // optional arguments
         //
         options.addOption("c", "compress", true, "The compression codec class (Optional)");
-        options.addOption("v", "verify", false, "Verify the integrity of the copy.  This is a slow operation.  (Optional)");
-        options.addOption("r", "remove", false, "Remove local file after successful copy into HDFS (Optional)");
         options.addOption("d", "dryrun", false, "Perform a dry run - do not actually copy the files into HDFS (Optional)");
 
         // mutually exclusive arguments.  one of them must be defined
         //
-        options.addOption("t", "hdfsdir", true, "HDFS target directory where files should be copied");
+        options.addOption("t", "hdfsdir", true, "HDFS target directory where files should be copied. " +
+            "Either this or the \"script\" option must be set.");
         options.addOption("i", "script", true, "A shell script which can be called to determine the HDFS target directory." +
                 "The standard input will contain a single line with the source file, and the script must put the HDFS " +
-                "target full path on standard output. (Optional)");
+                "target full path on standard output. Either this or the \"hdfsdif\" option must be set.");
+
+
+        // mutually exclusive arguments.  one of them must be defined
+        //
+        options.addOption("r", "remove", false, "Remove local file after successful copy into HDFS.  Either this or the \"completedir\" option must be set.");
+        options.addOption("o", "completedir", true, "Local filesystem completion directory where file is moved after successful copy into HDFS.  Either this or the \"remove\" option must be set.");
+
     }
 
     private void loadAndValidateOptions(String... args) throws ClassNotFoundException, IllegalAccessException, InstantiationException, IOException {
@@ -80,7 +84,6 @@ public class Slurper {
         if (commandLine.hasOption("compress")) {
             codec = (CompressionCodec) Class.forName(commandLine.getOptionValue("compress")).newInstance();
         }
-        verify = commandLine.hasOption("verify");
         remove = commandLine.hasOption("remove");
         dryRun = commandLine.hasOption("dryrun");
 
@@ -88,19 +91,37 @@ public class Slurper {
             log.info("Dry-run mode, no files will be copied");
         }
 
-        validateLocalSrcDir();
-        validateLocalCompleteDir();
-
-
-        if(!commandLine.hasOption("hdfsdir") && !commandLine.hasOption("script")) {
-            log.error("One of script or HDFS target directory must be supplied");
+        // make sure one of these has been set
+        //
+        if(!commandLine.hasOption("remove") && !commandLine.hasOption("completedir")) {
+            log.error("One of \"remove\" or \"completedir\" must be set");
             printUsageAndExit(options, 4);
         }
 
-        if(commandLine.hasOption("hdfsdir") && commandLine.hasOption("script")) {
-            log.error("Script or HDFS target directory cannot both be set");
+        // make sure ONLY one of these has been set
+        //
+        if(commandLine.hasOption("remove") && commandLine.hasOption("completedir")) {
+            log.error("Only one of \"remove\" or \"completedir\" can be set");
             printUsageAndExit(options, 5);
         }
+
+        validateLocalSrcDir();
+        validateLocalCompleteDir();
+
+        // make sure one of these has been set
+        //
+        if(!commandLine.hasOption("hdfsdir") && !commandLine.hasOption("script")) {
+            log.error("One of \"hdfsdir\" or \"script\" must be set");
+            printUsageAndExit(options, 4);
+        }
+
+        // make sure ONLY one of these has been set
+        //
+        if(commandLine.hasOption("hdfsdir") && commandLine.hasOption("script")) {
+            log.error("Only one of \"hdfsdir\" or \"script\" can be set");
+            printUsageAndExit(options, 5);
+        }
+
 
         if(commandLine.hasOption("hdfsdir")) {
             hdfsDestDir = new Path(commandLine.getOptionValue("hdfsdir"));
@@ -156,14 +177,22 @@ public class Slurper {
     private void run() {
         // read all the files in the local directory and process them serially
         //
+        int successCopy = 0;
+        int errorCopy = 0;
         for (File file : localSourceDir.listFiles()) {
-            try {
-                process(file);
-            } catch (IOException e) {
-                log.error("Hit snag attempting to copy file '" + file.getAbsolutePath() + "'", e);
+            if(file.isFile()) {
+                try {
+                    process(file);
+                    successCopy++;
+                } catch (IOException e) {
+                    errorCopy++;
+                    log.error("Hit snag attempting to copy file '" + file.getAbsolutePath() + "'", e);
+                }
             }
         }
-
+        if(!dryRun) {
+            log.info("Completed with " + successCopy + " successful copies, and " + errorCopy + " copy errors");
+        }
     }
 
     private void process(File file) throws IOException {
@@ -207,10 +236,9 @@ public class Slurper {
             IOUtils.closeStream(os);
         }
 
-        log.info("Target file size = " + hdfsFs.getFileStatus(targetHdfsFile).getLen());
-
-        if(verify) {
-            //hdfsFs.getFileChecksum(targetHdfsFile)
+        if(file.length() != hdfsFs.getFileStatus(targetHdfsFile).getLen()) {
+            throw new IOException("File sizes don't match, local = " + file.length() + ", HDFS = " +
+            hdfsFs.getFileStatus(targetHdfsFile).getLen());
         }
 
         // remove or move the file away from the source directory
@@ -244,7 +272,6 @@ public class Slurper {
             Slurper slurper = new Slurper();
             slurper.configure(args);
             slurper.run();
-            log.info("Done");
         } catch (Throwable t) {
             log.error("Caught exception in main()", t);
             System.exit(1000);
