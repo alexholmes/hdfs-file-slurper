@@ -19,9 +19,15 @@ if [ -f "$pidfile" ]; then
   echo "Pid file $pidfile exists but PID $pid no longer seems to be running, ignoring PID file"
 fi
 
-if [ -z "$HADOOP_BIN" ]; then
-  echo "HADOOP_BIN must be set"
-  exit 2;
+if [ ! -f "$HADOOP_BIN" ]; then
+  if [ -f "/usr/bin/hadoop" ]; then
+    HADOOP_BIN="/usr/bin/hadoop"
+    echo "HADOOP_BIN environment not set, but found script under $HADOOP_BIN"
+  else
+    echo "HADOOP_BIN must be set and point to the hadoop script"
+    echo "If hadoop is already in the path then this is as simple as export HADOOP_BIN=`which hadoop`"
+    exit 2;
+  fi
 fi
 
 "$HADOOP_BIN" jar ${bin}/../dist/lib/* com.alexholmes.hdfsslurper.Slurper  "$@" &

@@ -75,7 +75,7 @@ public class Slurper {
         options.addOption("c", "compress", true, "The compression codec class (Optional)");
         options.addOption("d", "dryrun", false, "Perform a dry run - do not actually copy the files into HDFS (Optional)");
         options.addOption("n", "donefile", false, "Touch a file in HDFS after the file copy process has completed.  The done filename is the HDFS target file appended with \".done\" (Optional)");
-        options.addOption("v", "verify", false, "Verify the file after it has been copied into HDFS.  This is slow as it involves reading the entire file from HDFS. (Optional)");
+        options.addOption("v", "verify", false, "Verify the file after it has been copied into HDFS.  This is slow as it involves reading the entire file from HDFS, after the copy has completed. (Optional)");
 
         // mutually exclusive arguments.  one of them must be defined
         //
@@ -202,12 +202,22 @@ public class Slurper {
         return o;
     }
 
+    private static class HiddenFileFilter implements FilenameFilter {
+        public boolean accept(File file, String s) {
+            boolean hiddenFile = s.startsWith(".");
+            if(hiddenFile) {
+                log.info("Ignoring hidden file '" + s + "'");
+            }
+            return !hiddenFile;
+        }
+    }
+
     private void run() {
         // read all the files in the local directory and process them serially
         //
         int successCopy = 0;
         int errorCopy = 0;
-        for (File file : localSourceDir.listFiles()) {
+        for (File file : localSourceDir.listFiles(new HiddenFileFilter())) {
             if (file.isFile()) {
                 try {
                     process(file);
