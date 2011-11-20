@@ -35,6 +35,7 @@ write is complete remove the leading period from the filename at which point it 
  the filename and write all files for a given day into a separate directory.
 *  If your files are small in size then you may want to consider aggregating them together either on the client side, or
 even better on the server side.  HDFS and MapReduce don't work well with large numbers of small files.
+* Subdirectories and their contents aren't currently supported
 
 ## License
 
