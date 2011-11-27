@@ -52,16 +52,13 @@ To get started, simply:
 
 1. Download, and run ant
 2. Tarball the directory and copy to a machine that has access to Hadoop, and untar.
-3. Set the `HADOOP_BIN` environment variable to refer to your local hadoop script.
+3. Set the `HADOOP_BIN` environment variable to refer to your local hadoop script (not required if you are running a packaged version of CDH).
 4. Run!
 
 Example environment setup:
 
 <pre><code># CDH hadoop script location
 export HADOOP_BIN=/usr/bin/hadoop
-
-# Copy third-party JAR into CDH Hadoop lib directory
-sudo cp  lib/commons-exec-1.1.jar /usr/lib/hadoop/lib/
 </code></pre>
 
 To see all the options available:
