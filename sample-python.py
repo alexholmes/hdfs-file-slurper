@@ -12,7 +12,7 @@ filename = os.path.basename(input_file)
 date=re.search(r'([0-9]{4}\-[0-9]{2}\-[0-9]{2})', filename).group(1)
 
 # construct our destination HDFS file
-hdfs_dest="/data/%s/%s" % (date, filename)
+hdfs_dest="hdfs:/data/%s/%s" % (date, filename)
 
 # write it to standard output
 print hdfs_dest,

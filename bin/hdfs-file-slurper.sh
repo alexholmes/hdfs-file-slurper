@@ -7,6 +7,7 @@
 script=`basename "$0"`
 bin=`dirname "$0"`
 bin=`cd "$bin">/dev/null; pwd`
+SLURPER_HOME=$bin/../
 
 pidfile=$bin/$script.pid
 
@@ -29,6 +30,21 @@ if [ ! -f "$HADOOP_BIN" ]; then
     exit 2;
   fi
 fi
+
+SLURPER_JAR_DIR=$SLURPER_HOME/lib
+
+function add_to_classpath() {
+  dir=$1
+  for f in $dir/*.jar; do
+    SLURPER_CLASSPATH=${SLURPER_CLASSPATH}:$f;
+  done
+
+  export SLURPER_CLASSPATH
+}
+
+add_to_classpath ${SLURPER_JAR_DIR}
+
+export HADOOP_CLASSPATH="${SLURPER_CLASSPATH}:${HADOOP_CLASSPATH}"
 
 "$HADOOP_BIN" jar ${bin}/../dist/lib/* com.alexholmes.hdfsslurper.Slurper  "$@" &
 

@@ -4,6 +4,7 @@ import org.apache.commons.exec.*;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.fs.FileStatus;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -14,10 +15,10 @@ import java.util.concurrent.TimeUnit;
 public class ScriptExecutor {
     private static Log log = LogFactory.getLog(ScriptExecutor.class);
 
-    public static String getHdfsTargetFileFromScript(String script, File localSrcFile, int timeout, TimeUnit timeoutUnit)
+    public static String getDestFileFromScript(String script, FileStatus srcFile, int timeout, TimeUnit timeoutUnit)
             throws IOException {
 
-        log.info(localSrcFile.getAbsolutePath());
+        log.info(srcFile.getPath());
 
         //CommandLine commandLine = new CommandLine("/bin/bash -c " + script);
         CommandLine commandLine = new CommandLine(script);
@@ -27,7 +28,7 @@ public class ScriptExecutor {
         executor.setExitValue(0);
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ByteArrayInputStream bais = new ByteArrayInputStream((localSrcFile.getAbsolutePath() + "\n").getBytes());
+        ByteArrayInputStream bais = new ByteArrayInputStream((srcFile.getPath().toString() + "\n").getBytes());
         PumpStreamHandler pumpStreamHandler = new PumpStreamHandler(baos, System.err, bais);
         executor.setStreamHandler(pumpStreamHandler);
 
@@ -36,7 +37,7 @@ public class ScriptExecutor {
         ExecuteWatchdog watchdog = new ExecuteWatchdog(timeoutUnit.toMillis(timeout));
         executor.setWatchdog(watchdog);
 
-        log.info("Launching script '" + script + "' with local source file '" + localSrcFile.getAbsolutePath() + "'");
+        log.info("Launching script '" + script + "' with local source file '" + srcFile.getPath() + "'");
         int exitCode = executor.execute(commandLine);
 
         if(exitCode != 0) {

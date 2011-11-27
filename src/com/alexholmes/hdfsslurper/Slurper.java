@@ -18,9 +18,11 @@ package com.alexholmes.hdfsslurper;
 
 import org.apache.commons.cli.*;
 import org.apache.commons.io.output.NullOutputStream;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
@@ -36,17 +38,27 @@ public class Slurper {
     private static Log log = LogFactory.getLog(Slurper.class);
 
     private CompressionCodec codec;
-    private File localSourceDir;
-    private File localCompleteDir;
-    private Path hdfsDestDir;
+    private Path srcDir;
+    private Path completeDir;
+    private Path destDir;
     private String script;
     private boolean remove;
     private boolean dryRun;
     private boolean doneFile;
     private boolean verify;
-    FileSystem hdfsFs;
+    FileSystem srcFs;
+    FileSystem destFs;
     Options options = new Options();
     Configuration config = new Configuration();
+    
+    public static final String ARGS_SOURCE_DIR = "src-dir";
+    public static final String ARGS_DEST_DIR = "dest-dir";
+    public static final String ARGS_COMPRESS = "compress";
+    public static final String ARGS_DRY_RUN = "dry-run";
+    public static final String ARGS_CREATE_DONE_FILE = "create-done-file";
+    public static final String ARGS_VERIFY = "verify";
+    public static final String ARGS_REMOVE_AFTER_COPY = "remove-after-copy";
+    public static final String ARGS_COMPLETE_DIR = "complete-dir";
 
     private void printUsageAndExit(Options options, int exitCode) {
         HelpFormatter formatter = new HelpFormatter();
@@ -66,31 +78,46 @@ public class Slurper {
     }
 
     private void setupOptions() {
+
+        String fullyQualifiedURIStory =  "This must be a fully-qualified URI. " +
+                " For example, for a local  /tmp directory, this would be file:/tmp.  " +
+                "For a /tmp directory in HDFS, this would be hdfs://localhost:8020/tmp or hdfs:/tmp if you wanted to" +
+                " use the NameNode host and port settings in your core-site.xml file.";
+
         // required arguments
         //
-        options.addOption(createRequiredOption("s", "sourcedir", true, "Local filesystem source directory for files to be copied into HDFS"));
+        options.addOption(createRequiredOption("s", ARGS_SOURCE_DIR, true, "Source directory.  " + fullyQualifiedURIStory));
 
         // optional arguments
         //
-        options.addOption("c", "compress", true, "The compression codec class (Optional)");
-        options.addOption("d", "dryrun", false, "Perform a dry run - do not actually copy the files into HDFS (Optional)");
-        options.addOption("n", "donefile", false, "Touch a file in HDFS after the file copy process has completed.  The done filename is the HDFS target file appended with \".done\" (Optional)");
-        options.addOption("v", "verify", false, "Verify the file after it has been copied into HDFS.  This is slow as it involves reading the entire file from HDFS, after the copy has completed. (Optional)");
+        options.addOption("c", ARGS_COMPRESS, true, "The compression codec class (Optional)");
+        options.addOption("d", ARGS_DRY_RUN, false, "Perform a dry run - do not actually copy the files (Optional)");
+        options.addOption("n", ARGS_CREATE_DONE_FILE, false, "Touch a file in the destination directory after the file " +
+                "copy process has completed.  The done filename is the same as the destination file appended " +
+                "with \".done\" (Optional)");
+        options.addOption("v", ARGS_VERIFY, false, "Verify the file after it has been copied.  This is slow as it " +
+                "involves reading the entire destination file after the copy has completed. (Optional)");
 
         // mutually exclusive arguments.  one of them must be defined
         //
-        options.addOption("t", "hdfsdir", true, "HDFS target directory where files should be copied. " +
-                "Either this or the \"script\" option must be set.");
-        options.addOption("i", "script", true, "A shell script which can be called to determine the HDFS target directory." +
-                "The standard input will contain a single line with the source file, and the script must put the HDFS " +
-                "target full path on standard output. Either this or the \"hdfsdif\" option must be set.");
+        options.addOption("t", ARGS_DEST_DIR, true, "Destination directory where files should be copied. " +
+                "Either this or the \"script\" option must be set. " + fullyQualifiedURIStory);
+        options.addOption("i", "script", true, "A shell script which can be called to determine the destination directory." +
+                "The standard input will contain a single line with the fully qualified URI of the source file, and the script must put the destination " +
+                " full path on standard output. " + fullyQualifiedURIStory + "  Either this or the \"hdfsdif\" option must be set.");
 
 
         // mutually exclusive arguments.  one of them must be defined
         //
-        options.addOption("r", "remove", false, "Remove local file after successful copy into HDFS.  Either this or the \"completedir\" option must be set.");
-        options.addOption("o", "completedir", true, "Local filesystem completion directory where file is moved after successful copy into HDFS.  Either this or the \"remove\" option must be set.");
+        options.addOption("r", ARGS_REMOVE_AFTER_COPY, false, "Remove the source file after a successful copy.  Either this or the \"completedir\" option must be set.");
+        options.addOption("o", ARGS_COMPLETE_DIR, true, "Completion directory where file is moved after successful copy.  Must be in the same filesystem as the source file.  Either this or the \"remove\" option must be set.");
+    }
 
+    public void checkScheme(Path p, String typeOfPath) {
+        if(StringUtils.isBlank(p.toUri().getScheme())) {
+            log.error("The " + typeOfPath + " scheme cannot be null.  An example of a valid scheme is 'hdfs://localhost:8020/tmp' or 'file:/tmp'");
+            printUsageAndExit(options, 50);
+        }
     }
 
     private void loadAndValidateOptions(String... args) throws ClassNotFoundException, IllegalAccessException, InstantiationException, IOException {
@@ -104,16 +131,20 @@ public class Slurper {
             return;
         }
 
-        localSourceDir = new File(commandLine.getOptionValue("sourcedir"));
-        localCompleteDir = new File(commandLine.getOptionValue("completedir"));
-        if (commandLine.hasOption("compress")) {
-            codec = (CompressionCodec)
-                    ReflectionUtils.newInstance(Class.forName(commandLine.getOptionValue("compress")), config);
+        srcDir = new Path(commandLine.getOptionValue(ARGS_SOURCE_DIR));
+        String dir = commandLine.getOptionValue(ARGS_COMPLETE_DIR);
+        if(dir != null) {
+            completeDir = new Path(dir);
         }
-        remove = commandLine.hasOption("remove");
-        dryRun = commandLine.hasOption("dryrun");
-        doneFile = commandLine.hasOption("donefile");
-        verify = commandLine.hasOption("verify");
+
+        if (commandLine.hasOption(ARGS_COMPRESS)) {
+            codec = (CompressionCodec)
+                    ReflectionUtils.newInstance(Class.forName(commandLine.getOptionValue(ARGS_COMPRESS)), config);
+        }
+        remove = commandLine.hasOption(ARGS_REMOVE_AFTER_COPY);
+        dryRun = commandLine.hasOption(ARGS_DRY_RUN);
+        doneFile = commandLine.hasOption(ARGS_CREATE_DONE_FILE);
+        verify = commandLine.hasOption(ARGS_VERIFY);
 
         if (dryRun) {
             log.info("Dry-run mode, no files will be copied");
@@ -121,16 +152,9 @@ public class Slurper {
 
         // make sure one of these has been set
         //
-        if (!commandLine.hasOption("remove") && !commandLine.hasOption("completedir")) {
-            log.error("One of \"remove\" or \"completedir\" must be set");
-            printUsageAndExit(options, 4);
-        }
-
-        // make sure ONLY one of these has been set
-        //
-        if (commandLine.hasOption("remove") && commandLine.hasOption("completedir")) {
-            log.error("Only one of \"remove\" or \"completedir\" can be set");
-            printUsageAndExit(options, 5);
+        if (!commandLine.hasOption(ARGS_REMOVE_AFTER_COPY) && !commandLine.hasOption(ARGS_COMPLETE_DIR)) {
+            log.error("One of \"--remove\" or \"--complete-dir\" must be set");
+            printUsageAndExit(options, 2);
         }
 
         validateLocalSrcDir();
@@ -138,61 +162,68 @@ public class Slurper {
 
         // make sure one of these has been set
         //
-        if (!commandLine.hasOption("hdfsdir") && !commandLine.hasOption("script")) {
-            log.error("One of \"hdfsdir\" or \"script\" must be set");
+        if (!commandLine.hasOption(ARGS_DEST_DIR) && !commandLine.hasOption("script")) {
+            log.error("One of \"--dest-dir\" or \"--script\" must be set");
             printUsageAndExit(options, 4);
         }
 
         // make sure ONLY one of these has been set
         //
-        if (commandLine.hasOption("hdfsdir") && commandLine.hasOption("script")) {
-            log.error("Only one of \"hdfsdir\" or \"script\" can be set");
+        if (commandLine.hasOption(ARGS_DEST_DIR) && commandLine.hasOption("script")) {
+            log.error("Only one of \"--dest-dir\" or \"--script\" can be set");
             printUsageAndExit(options, 5);
         }
 
 
-        if (commandLine.hasOption("hdfsdir")) {
-            hdfsDestDir = new Path(commandLine.getOptionValue("hdfsdir"));
+        if (commandLine.hasOption(ARGS_DEST_DIR)) {
+            destDir = new Path(commandLine.getOptionValue(ARGS_DEST_DIR));
+            checkScheme(destDir, "destination directory");
+            destFs = FileSystem.get(destDir.toUri(), new Configuration());
         } else {
             script = commandLine.getOptionValue("script");
         }
 
-        hdfsFs = FileSystem.get(new Configuration());
     }
 
-    private void validateLocalSrcDir() {
-        if (!localSourceDir.exists() || !localSourceDir.isDirectory()) {
-            log.error("Local filesystem source directory must exist: " + localSourceDir.getAbsolutePath());
-            printUsageAndExit(options, 2);
-        }
-
-        if (!localSourceDir.canWrite()) {
-            log.error("Must have permissions to write to local filesystem source directory : " + localSourceDir.getAbsolutePath());
-            printUsageAndExit(options, 3);
+    private void validateLocalSrcDir() throws IOException {
+        checkScheme(srcDir, "source directory");
+        srcFs = FileSystem.get(srcDir.toUri(), new Configuration());
+        if (!srcFs.exists(srcDir) || !srcFs.getFileStatus(srcDir).isDir()) {
+            log.error("Source directory must exist: " + srcDir);
+            printUsageAndExit(options, 20);
         }
     }
 
-    private void validateLocalCompleteDir() {
+    private void validateLocalCompleteDir() throws IOException {
         if (!remove) {
-            if (localCompleteDir.exists() && !localSourceDir.isDirectory()) {
-                log.error("Local filesystem complete directory must be a directory: " + localCompleteDir.getAbsolutePath());
-                printUsageAndExit(options, 6);
+            checkScheme(completeDir, "complete directory");
+
+            // make sure the scheme is the same for the source and complete dir, otherwise the move
+            // won't be atomic
+            //
+            if(!srcDir.toUri().getScheme().equals(completeDir.toUri().getScheme())) {
+                log.error("The source and completed directory schemes must match.");
+                printUsageAndExit(options, 3);
             }
-            if (!localCompleteDir.exists()) {
-                log.info("Attempting creation of local filesystem complete directory: " + localCompleteDir.getAbsolutePath());
-                if (!localCompleteDir.mkdir()) {
-                    log.error("Failed to create local filesystem complete directory: " + localCompleteDir.getAbsolutePath());
-                    printUsageAndExit(options, 7);
+
+            if (srcFs.exists(completeDir) && !srcFs.getFileStatus(completeDir).isDir()) {
+                log.error("Completed directory appears to be a file: " + completeDir);
+                printUsageAndExit(options, 40);
+            }
+
+            if (!srcFs.exists(completeDir)) {
+                log.info("Attempting creation of complete directory: " + completeDir);
+                if (!srcFs.mkdirs(completeDir)) {
+                    log.error("Failed to create complete directory: " + completeDir);
+                    printUsageAndExit(options, 41);
                 }
             }
-            if (!localCompleteDir.canWrite()) {
-                log.error("Must be able to write to local filesystem complete directory: " + localCompleteDir.getAbsolutePath());
-                printUsageAndExit(options, 8);
+
+            if (srcDir.toUri().equals(completeDir.toUri())) {
+                log.error("Source and complete directories can't be the same!");
+                printUsageAndExit(options, 43);
             }
-            if (localSourceDir.equals(localCompleteDir)) {
-                log.error("Local source and complete directories can't be the same!");
-                printUsageAndExit(options, 9);
-            }
+
         }
     }
 
@@ -202,44 +233,40 @@ public class Slurper {
         return o;
     }
 
-    private static class HiddenFileFilter implements FilenameFilter {
-        public boolean accept(File file, String s) {
-            boolean hiddenFile = s.startsWith(".");
-            if(hiddenFile) {
-                log.info("Ignoring hidden file '" + s + "'");
-            }
-            return !hiddenFile;
-        }
-    }
-
-    private void run() {
+    private void run() throws IOException {
         // read all the files in the local directory and process them serially
         //
         int successCopy = 0;
         int errorCopy = 0;
-        for (File file : localSourceDir.listFiles(new HiddenFileFilter())) {
-            if (file.isFile()) {
+        for (FileStatus fs : srcFs.listStatus(srcDir)) {
+            if (!fs.isDir()) {
+                if(fs.getPath().getName().startsWith(".")) {
+                    log.info("Ignoring hidden file '" + fs.getPath() + "'");
+                    continue;
+                }
                 try {
-                    process(file);
+                    process(fs);
                     successCopy++;
                 } catch (IOException e) {
                     errorCopy++;
-                    log.error("Hit snag attempting to copy file '" + file.getAbsolutePath() + "'", e);
+                    log.error("Hit snag attempting to copy file '" + fs.getPath() + "'", e);
                 }
             }
         }
         if (!dryRun) {
-            log.info("Completed with " + successCopy + " successful copies, and " + errorCopy + " copy errors");
+            log.info("Completed with " + successCopy + " successful copies, and " + errorCopy + " errors");
         }
     }
 
-    private void process(File file) throws IOException {
+    private void process(FileStatus srcFileStatus) throws IOException {
+
+        Path srcFile = srcFileStatus.getPath();
 
         // get the target HDFS file
         //
-        Path targetHdfsFile = getHdfsTargetPath(file);
+        Path destFile = getHdfsTargetPath(srcFileStatus);
 
-        log.info("Copying local file '" + file.getAbsolutePath() + "' to HDFS location '" + targetHdfsFile + "'");
+        log.info("Copying source file '" + srcFile + "' to destination '" + destFile + "'");
 
         if (dryRun) {
             return;
@@ -247,12 +274,11 @@ public class Slurper {
 
         // if the directory of the target HDFS file doesn't exist, attempt to create it
         //
-        Path parentHdfsDir = targetHdfsFile.getParent();
-        if (!hdfsFs.exists(parentHdfsDir)) {
-            log.info("Attempting creation of HDFS target directory: " + parentHdfsDir);
-            if (!hdfsFs.mkdirs(parentHdfsDir)) {
-                log.error("Failed to create target directory in HDFS: " + parentHdfsDir);
-                return;
+        Path destParentDir = destFile.getParent();
+        if (!destFs.exists(destParentDir)) {
+            log.info("Attempting creation of HDFS target directory: " + destParentDir);
+            if (!destFs.mkdirs(destParentDir)) {
+                throw new IOException("Failed to create target directory in HDFS: " + destParentDir);
             }
         }
 
@@ -262,11 +288,11 @@ public class Slurper {
         OutputStream os = null;
         CRC32 crc = new CRC32();
         try {
-            is = new BufferedInputStream(new FileInputStream(file));
+            is = new BufferedInputStream(srcFs.open(srcFile));
             if(verify) {
                 is = new CheckedInputStream(is, crc);
             }
-            os = hdfsFs.create(targetHdfsFile);
+            os = destFs.create(destFile);
 
             if (codec != null) {
                 os = codec.createOutputStream(os);
@@ -278,33 +304,35 @@ public class Slurper {
             IOUtils.closeStream(os);
         }
 
-        long localFileSize = file.length();
-        long hdfsFileSize = hdfsFs.getFileStatus(targetHdfsFile).getLen();
-        if (codec == null && localFileSize != hdfsFileSize) {
-            throw new IOException("File sizes don't match, local = " + localFileSize + ", HDFS = " + hdfsFileSize);
+        long srcFileSize = srcFs.getFileStatus(srcFile).getLen();
+        long destFileSize = destFs.getFileStatus(destFile).getLen();
+        if (codec == null && srcFileSize != destFileSize) {
+            throw new IOException("File sizes don't match, source = " + srcFileSize + ", dest = " + destFileSize);
         }
 
-        log.info("Local file size = " + localFileSize + ", HDFS file size = " + hdfsFileSize);
+        log.info("Local file size = " + srcFileSize + ", HDFS file size = " + destFileSize);
 
         if (verify) {
-            verify(targetHdfsFile, crc.getValue());
+            verify(destFile, crc.getValue());
         }
 
         // remove or move the file away from the source directory
         //
         if (remove) {
-            if (!file.delete()) {
-                log.warn("Failed to delete file '" + file.getAbsolutePath() + "'");
+            if (!srcFs.delete(srcFile, false)) {
+                log.warn("Failed to delete file '" + srcFile + "'");
             }
         } else {
-            File dest = new File(localCompleteDir, file.getName());
-            if (!file.renameTo(dest)) {
-                log.warn("Failed to move file from '" + file.getAbsolutePath() + "' to '" + dest.getAbsolutePath() + "'");
+            Path completeFile = new Path(completeDir, srcFile.getName());
+            if (!srcFs.rename(srcFile, completeFile)) {
+                log.warn("Failed to move file from '" + srcFile + "' to '" + completeFile + "'");
+            } else {
+                log.info("Moved source file to " + completeFile);
             }
         }
 
         if (doneFile) {
-            Path doneFile = new Path(targetHdfsFile.getParent(), targetHdfsFile.getName() + ".done");
+            Path doneFile = new Path(destFile.getParent(), destFile.getName() + ".done");
             log.info("Touching done file " + doneFile);
             touch(doneFile);
         }
@@ -324,7 +352,7 @@ public class Slurper {
         InputStream in = null;
         CRC32 crc = new CRC32();
         try {
-            InputStream is = new BufferedInputStream(hdfsFs.open(path));
+            InputStream is = new BufferedInputStream(path.getFileSystem(config).open(path));
             if (codec != null) {
                 is = codec.createInputStream(is);
             }
@@ -337,19 +365,28 @@ public class Slurper {
     }
 
     private void touch(Path p) throws IOException {
-        hdfsFs.create(p).close();
+        destFs.create(p).close();
     }
 
-    private Path getHdfsTargetPath(File localSrc) throws IOException {
-        if (hdfsDestDir != null) {
+    private Path getHdfsTargetPath(FileStatus srcFile) throws IOException {
+        if (destDir != null) {
             if (codec != null) {
-                return new Path(hdfsDestDir, localSrc.getName() + codec.getDefaultExtension());
+                return new Path(destDir, srcFile.getPath().getName() + codec.getDefaultExtension());
             } else {
-                return new Path(hdfsDestDir, localSrc.getName());
+                return new Path(destDir, srcFile.getPath().getName());
             }
         } else {
-            return new Path(ScriptExecutor.getHdfsTargetFileFromScript(script, localSrc, 60, TimeUnit.SECONDS));
+            return getDestPathFromScript(srcFile);
         }
+    }
+
+    private Path getDestPathFromScript(FileStatus srcFile) throws IOException {
+        Path p = new Path(ScriptExecutor.getDestFileFromScript(script, srcFile, 60, TimeUnit.SECONDS));
+        if(p.toUri().getScheme() == null) {
+            throw new IOException("Destination path from script must be a URI with a scheme: '" + p + "'");
+        }
+        destFs = FileSystem.get(p.toUri(), config);
+        return p;
     }
 
     public static void main(String... args) {
@@ -362,6 +399,4 @@ public class Slurper {
             System.exit(1000);
         }
     }
-
-
 }

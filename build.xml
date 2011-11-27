@@ -9,7 +9,7 @@
         <path id="lib.path.ref">
             <fileset dir="lib" includes="*.jar"/>
         </path>
-        <javac srcdir="src" destdir="build/classes">
+        <javac debug="true" srcdir="src" destdir="build/classes">
              <classpath refid="lib.path.ref"/>
         </javac>
     </target>
