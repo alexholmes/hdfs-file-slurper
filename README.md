@@ -40,7 +40,7 @@ work well with large numbers of small files.
 * Subdirectories and their contents aren't currently supported
 * Source, complete and destination paths must all be in HDFS URI form, with a scheme.  For example /tmp on the local
  filesystem would be `file:/tmp`, and /app in HDFS would be `hdfs:/app` (assuming you wanted to use the default NameNode and
- port settings defined in `core-site.xml`.
+ port settings defined in `core-site.xml` - if you didn't the URI can contain the hostname and port of a different Hadoop cluster).
 
 ## License
 
