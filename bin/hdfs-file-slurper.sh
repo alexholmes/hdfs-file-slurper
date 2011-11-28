@@ -6,8 +6,7 @@
 # get the current directory
 script=`basename "$0"`
 bin=`dirname "$0"`
-bin=`cd "$bin">/dev/null; pwd`
-SLURPER_HOME=$bin/../
+SLURPER_HOME=`cd "$bin/../">/dev/null; pwd`
 
 pidfile=$bin/$script.pid
 
