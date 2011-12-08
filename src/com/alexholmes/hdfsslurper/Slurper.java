@@ -17,48 +17,56 @@
 package com.alexholmes.hdfsslurper;
 
 import org.apache.commons.cli.*;
-import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.util.ReflectionUtils;
 
-import java.io.*;
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.zip.CRC32;
-import java.util.zip.CheckedInputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Slurper {
     private static Log log = LogFactory.getLog(Slurper.class);
 
     private CompressionCodec codec;
     private Path srcDir;
+    private Path workDir;
     private Path completeDir;
+    private Path errorDir;
     private Path destDir;
     private String script;
     private boolean remove;
-    private boolean dryRun;
     private boolean doneFile;
     private boolean verify;
+    private int numThreads;
+    private long pollSleepPeriodMillis = 1000;
+    private boolean daemon;
     FileSystem srcFs;
     FileSystem destFs;
     Options options = new Options();
     Configuration config = new Configuration();
-    
+
     public static final String ARGS_SOURCE_DIR = "src-dir";
+    public static final String ARGS_WORK_DIR = "work-dir";
     public static final String ARGS_DEST_DIR = "dest-dir";
     public static final String ARGS_COMPRESS = "compress";
-    public static final String ARGS_DRY_RUN = "dry-run";
+    public static final String ARGS_DAEMON = "daemon";
     public static final String ARGS_CREATE_DONE_FILE = "create-done-file";
     public static final String ARGS_VERIFY = "verify";
     public static final String ARGS_REMOVE_AFTER_COPY = "remove-after-copy";
     public static final String ARGS_COMPLETE_DIR = "complete-dir";
+    public static final String ARGS_ERROR_DIR = "error-dir";
+    public static final String ARGS_WORKER_THREADS = "threads";
+    public static final String ARGS_POLL_PERIOD_MILLIS = "poll-period-millis";
+    public static final String ARGS_SCRIPT = "script";
 
     private void printUsageAndExit(Options options, int exitCode) {
         HelpFormatter formatter = new HelpFormatter();
@@ -79,7 +87,7 @@ public class Slurper {
 
     private void setupOptions() {
 
-        String fullyQualifiedURIStory =  "This must be a fully-qualified URI. " +
+        String fullyQualifiedURIStory = "This must be a fully-qualified URI. " +
                 " For example, for a local  /tmp directory, this would be file:/tmp.  " +
                 "For a /tmp directory in HDFS, this would be hdfs://localhost:8020/tmp or hdfs:/tmp if you wanted to" +
                 " use the NameNode host and port settings in your core-site.xml file.";
@@ -87,22 +95,26 @@ public class Slurper {
         // required arguments
         //
         options.addOption(createRequiredOption("s", ARGS_SOURCE_DIR, true, "Source directory.  " + fullyQualifiedURIStory));
+        options.addOption(createRequiredOption("w", ARGS_WORK_DIR, true, "Work directory.  " + fullyQualifiedURIStory));
+        options.addOption(createRequiredOption("e", ARGS_ERROR_DIR, true, "Error directory.  " + fullyQualifiedURIStory));
+        options.addOption(createRequiredOption("x", ARGS_WORKER_THREADS, true, "The number of worker threads"));
 
         // optional arguments
         //
+        options.addOption("a", ARGS_DAEMON, false, "Whether to run as a daemon (always up), or just process the existing files and exit.");
         options.addOption("c", ARGS_COMPRESS, true, "The compression codec class (Optional)");
-        options.addOption("d", ARGS_DRY_RUN, false, "Perform a dry run - do not actually copy the files (Optional)");
         options.addOption("n", ARGS_CREATE_DONE_FILE, false, "Touch a file in the destination directory after the file " +
                 "copy process has completed.  The done filename is the same as the destination file appended " +
                 "with \".done\" (Optional)");
         options.addOption("v", ARGS_VERIFY, false, "Verify the file after it has been copied.  This is slow as it " +
                 "involves reading the entire destination file after the copy has completed. (Optional)");
+        options.addOption("p", ARGS_POLL_PERIOD_MILLIS, false, "The time threads wait in milliseconds between polling the file system for new files. (Optional)");
 
         // mutually exclusive arguments.  one of them must be defined
         //
         options.addOption("t", ARGS_DEST_DIR, true, "Destination directory where files should be copied. " +
-                "Either this or the \"script\" option must be set. " + fullyQualifiedURIStory);
-        options.addOption("i", "script", true, "A shell script which can be called to determine the destination directory." +
+                "Either this or the \"" + ARGS_SCRIPT + "\" option must be set. " + fullyQualifiedURIStory);
+        options.addOption("i", ARGS_SCRIPT, true, "A shell script which can be called to determine the destination directory." +
                 "The standard input will contain a single line with the fully qualified URI of the source file, and the script must put the destination " +
                 " full path on standard output. " + fullyQualifiedURIStory + "  Either this or the \"hdfsdif\" option must be set.");
 
@@ -114,10 +126,18 @@ public class Slurper {
     }
 
     public void checkScheme(Path p, String typeOfPath) {
-        if(StringUtils.isBlank(p.toUri().getScheme())) {
+        if (StringUtils.isBlank(p.toUri().getScheme())) {
             log.error("The " + typeOfPath + " scheme cannot be null.  An example of a valid scheme is 'hdfs://localhost:8020/tmp' or 'file:/tmp'");
             printUsageAndExit(options, 50);
         }
+    }
+
+    private String getRequiredOption(CommandLine commandLine, String option) {
+        if (!commandLine.hasOption(option)) {
+            log.error(option + " is a required option");
+            printUsageAndExit(options, 2);
+        }
+        return commandLine.getOptionValue(option);
     }
 
     private void loadAndValidateOptions(String... args) throws ClassNotFoundException, IllegalAccessException, InstantiationException, IOException {
@@ -131,24 +151,35 @@ public class Slurper {
             return;
         }
 
-        srcDir = new Path(commandLine.getOptionValue(ARGS_SOURCE_DIR));
+        srcDir = new Path(getRequiredOption(commandLine, ARGS_SOURCE_DIR));
+        workDir = new Path(getRequiredOption(commandLine, ARGS_WORK_DIR));
+        errorDir = new Path(getRequiredOption(commandLine, ARGS_ERROR_DIR));
+
         String dir = commandLine.getOptionValue(ARGS_COMPLETE_DIR);
-        if(dir != null) {
+        if (dir != null) {
             completeDir = new Path(dir);
         }
+
+        daemon = commandLine.hasOption(ARGS_DAEMON);
+
+        if (commandLine.hasOption(ARGS_POLL_PERIOD_MILLIS)) {
+            pollSleepPeriodMillis = Integer.valueOf(commandLine.getOptionValue(ARGS_POLL_PERIOD_MILLIS));
+        }
+
+        if (!commandLine.hasOption(ARGS_WORKER_THREADS)) {
+            log.error(ARGS_WORKER_THREADS + " must be set");
+            printUsageAndExit(options, 4);
+        }
+        numThreads = Integer.valueOf(commandLine.getOptionValue(ARGS_WORKER_THREADS));
+
 
         if (commandLine.hasOption(ARGS_COMPRESS)) {
             codec = (CompressionCodec)
                     ReflectionUtils.newInstance(Class.forName(commandLine.getOptionValue(ARGS_COMPRESS)), config);
         }
         remove = commandLine.hasOption(ARGS_REMOVE_AFTER_COPY);
-        dryRun = commandLine.hasOption(ARGS_DRY_RUN);
         doneFile = commandLine.hasOption(ARGS_CREATE_DONE_FILE);
         verify = commandLine.hasOption(ARGS_VERIFY);
-
-        if (dryRun) {
-            log.info("Dry-run mode, no files will be copied");
-        }
 
         // make sure one of these has been set
         //
@@ -158,18 +189,18 @@ public class Slurper {
         }
 
         validateLocalSrcDir();
-        validateLocalCompleteDir();
+        validateDirectories();
 
         // make sure one of these has been set
         //
-        if (!commandLine.hasOption(ARGS_DEST_DIR) && !commandLine.hasOption("script")) {
+        if (!commandLine.hasOption(ARGS_DEST_DIR) && !commandLine.hasOption(ARGS_SCRIPT)) {
             log.error("One of \"--dest-dir\" or \"--script\" must be set");
             printUsageAndExit(options, 4);
         }
 
         // make sure ONLY one of these has been set
         //
-        if (commandLine.hasOption(ARGS_DEST_DIR) && commandLine.hasOption("script")) {
+        if (commandLine.hasOption(ARGS_DEST_DIR) && commandLine.hasOption(ARGS_SCRIPT)) {
             log.error("Only one of \"--dest-dir\" or \"--script\" can be set");
             printUsageAndExit(options, 5);
         }
@@ -180,7 +211,7 @@ public class Slurper {
             checkScheme(destDir, "destination directory");
             destFs = FileSystem.get(destDir.toUri(), new Configuration());
         } else {
-            script = commandLine.getOptionValue("script");
+            script = commandLine.getOptionValue(ARGS_SCRIPT);
         }
 
     }
@@ -194,36 +225,47 @@ public class Slurper {
         }
     }
 
-    private void validateLocalCompleteDir() throws IOException {
+    private void validateSameFileSystem(Path p1, Path p2) throws IOException {
+        FileSystem fs1 = p1.getFileSystem(config);
+        FileSystem fs2 = p2.getFileSystem(config);
+        URI u1 = fs1.getUri();
+        URI u2 = fs2.getUri();
+        if (!u1.equals(u2)) {
+            log.error("The two paths must exist on the same file system: " + p1 + "," + p2);
+            printUsageAndExit(options, 3);
+        }
+
+        if (p1.equals(p2)) {
+            log.error("The paths must be distinct: " + p1);
+            printUsageAndExit(options, 3);
+        }
+    }
+
+    private void testCreateDir(Path p) throws IOException {
+        if (srcFs.exists(p) && !srcFs.getFileStatus(p).isDir()) {
+            log.error("Directory appears to be a file: " + p);
+            printUsageAndExit(options, 40);
+        }
+
+        if (!srcFs.exists(p)) {
+            log.info("Attempting creation of directory: " + p);
+            if (!srcFs.mkdirs(p)) {
+                log.error("Failed to create directory: " + p);
+                printUsageAndExit(options, 41);
+            }
+        }
+    }
+
+    private void validateDirectories() throws IOException {
+        validateSameFileSystem(srcDir, workDir);
+        validateSameFileSystem(srcDir, errorDir);
+
+        testCreateDir(workDir);
+        testCreateDir(errorDir);
+
         if (!remove) {
-            checkScheme(completeDir, "complete directory");
-
-            // make sure the scheme is the same for the source and complete dir, otherwise the move
-            // won't be atomic
-            //
-            if(!srcDir.toUri().getScheme().equals(completeDir.toUri().getScheme())) {
-                log.error("The source and completed directory schemes must match.");
-                printUsageAndExit(options, 3);
-            }
-
-            if (srcFs.exists(completeDir) && !srcFs.getFileStatus(completeDir).isDir()) {
-                log.error("Completed directory appears to be a file: " + completeDir);
-                printUsageAndExit(options, 40);
-            }
-
-            if (!srcFs.exists(completeDir)) {
-                log.info("Attempting creation of complete directory: " + completeDir);
-                if (!srcFs.mkdirs(completeDir)) {
-                    log.error("Failed to create complete directory: " + completeDir);
-                    printUsageAndExit(options, 41);
-                }
-            }
-
-            if (srcDir.toUri().equals(completeDir.toUri())) {
-                log.error("Source and complete directories can't be the same!");
-                printUsageAndExit(options, 43);
-            }
-
+            validateSameFileSystem(srcDir, completeDir);
+            testCreateDir(completeDir);
         }
     }
 
@@ -233,160 +275,48 @@ public class Slurper {
         return o;
     }
 
-    private void run() throws IOException {
-        // read all the files in the local directory and process them serially
-        //
-        int successCopy = 0;
-        int errorCopy = 0;
-        for (FileStatus fs : srcFs.listStatus(srcDir)) {
-            if (!fs.isDir()) {
-                if(fs.getPath().getName().startsWith(".")) {
-                    log.info("Ignoring hidden file '" + fs.getPath() + "'");
-                    continue;
-                }
+    private void run() throws IOException, InterruptedException {
+
+        FileSystemManager fileSystemManager = new FileSystemManager(config, srcDir, workDir, completeDir, errorDir,
+                destDir, remove);
+
+        final List<WorkerThread> workerThreads = new ArrayList<WorkerThread>();
+        for (int i = 1; i <= numThreads; i++) {
+            WorkerThread t = new WorkerThread(config, verify, doneFile, script, codec, fileSystemManager,
+                    i, daemon, TimeUnit.MILLISECONDS, pollSleepPeriodMillis);
+            t.start();
+            workerThreads.add(t);
+        }
+
+        final AtomicBoolean programmaticShutdown = new AtomicBoolean(false);
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
                 try {
-                    process(fs);
-                    successCopy++;
-                } catch (IOException e) {
-                    errorCopy++;
-                    log.error("Hit snag attempting to copy file '" + fs.getPath() + "'", e);
+                    if (programmaticShutdown.get()) {
+                        log.info("JVM shutting down");
+                    } else {
+                        log.info("External process signalled JVM shutdown, signalling to threads");
+                        for (WorkerThread workerThread : workerThreads) {
+                            workerThread.shutdown();
+                        }
+                        log.info("Waiting for threads to shutdown");
+                        for (WorkerThread workerThread : workerThreads) {
+                            workerThread.join();
+                        }
+                        log.info("Threads dead");
+                    }
+                } catch (Throwable t) {
+                    log.error("Hit snag in shutdown hook", t);
                 }
+
             }
+        });
+
+        for (WorkerThread workerThread : workerThreads) {
+            workerThread.join();
         }
-        if (!dryRun) {
-            log.info("Completed with " + successCopy + " successful copies, and " + errorCopy + " errors");
-        }
-    }
-
-    private void process(FileStatus srcFileStatus) throws IOException {
-
-        Path srcFile = srcFileStatus.getPath();
-
-        // get the target HDFS file
-        //
-        Path destFile = getHdfsTargetPath(srcFileStatus);
-
-        log.info("Copying source file '" + srcFile + "' to destination '" + destFile + "'");
-
-        if (dryRun) {
-            return;
-        }
-
-        // if the directory of the target HDFS file doesn't exist, attempt to create it
-        //
-        Path destParentDir = destFile.getParent();
-        if (!destFs.exists(destParentDir)) {
-            log.info("Attempting creation of HDFS target directory: " + destParentDir);
-            if (!destFs.mkdirs(destParentDir)) {
-                throw new IOException("Failed to create target directory in HDFS: " + destParentDir);
-            }
-        }
-
-        // copy the file
-        //
-        InputStream is = null;
-        OutputStream os = null;
-        CRC32 crc = new CRC32();
-        try {
-            is = new BufferedInputStream(srcFs.open(srcFile));
-            if(verify) {
-                is = new CheckedInputStream(is, crc);
-            }
-            os = destFs.create(destFile);
-
-            if (codec != null) {
-                os = codec.createOutputStream(os);
-            }
-
-            IOUtils.copyBytes(is, os, 4096, true);
-        } finally {
-            IOUtils.closeStream(is);
-            IOUtils.closeStream(os);
-        }
-
-        long srcFileSize = srcFs.getFileStatus(srcFile).getLen();
-        long destFileSize = destFs.getFileStatus(destFile).getLen();
-        if (codec == null && srcFileSize != destFileSize) {
-            throw new IOException("File sizes don't match, source = " + srcFileSize + ", dest = " + destFileSize);
-        }
-
-        log.info("Local file size = " + srcFileSize + ", HDFS file size = " + destFileSize);
-
-        if (verify) {
-            verify(destFile, crc.getValue());
-        }
-
-        // remove or move the file away from the source directory
-        //
-        if (remove) {
-            if (!srcFs.delete(srcFile, false)) {
-                log.warn("Failed to delete file '" + srcFile + "'");
-            }
-        } else {
-            Path completeFile = new Path(completeDir, srcFile.getName());
-            if (!srcFs.rename(srcFile, completeFile)) {
-                log.warn("Failed to move file from '" + srcFile + "' to '" + completeFile + "'");
-            } else {
-                log.info("Moved source file to " + completeFile);
-            }
-        }
-
-        if (doneFile) {
-            Path doneFile = new Path(destFile.getParent(), destFile.getName() + ".done");
-            log.info("Touching done file " + doneFile);
-            touch(doneFile);
-        }
-    }
-
-    private void verify(Path hdfs, long localFileCRC) throws IOException {
-        log.info("Verifying files");
-        long hdfsCRC = hdfsFileCRC32(hdfs);
-
-        if(localFileCRC != hdfsCRC) {
-            throw new IOException("CRC's don't match, local file is " + localFileCRC + " HDFS file is " + hdfsCRC);
-        }
-        log.info("CRC's match (" + localFileCRC + ")");
-    }
-
-    private long hdfsFileCRC32(Path path) throws IOException {
-        InputStream in = null;
-        CRC32 crc = new CRC32();
-        try {
-            InputStream is = new BufferedInputStream(path.getFileSystem(config).open(path));
-            if (codec != null) {
-                is = codec.createInputStream(is);
-            }
-            in = new CheckedInputStream(is, crc);
-            org.apache.commons.io.IOUtils.copy(in, new NullOutputStream());
-        } finally {
-            org.apache.commons.io.IOUtils.closeQuietly(in);
-        }
-        return crc.getValue();
-    }
-
-    private void touch(Path p) throws IOException {
-        destFs.create(p).close();
-    }
-
-    private Path getHdfsTargetPath(FileStatus srcFile) throws IOException {
-        if (destDir != null) {
-            if (codec != null) {
-                return new Path(destDir, srcFile.getPath().getName() + codec.getDefaultExtension());
-            } else {
-                return new Path(destDir, srcFile.getPath().getName());
-            }
-        } else {
-            return getDestPathFromScript(srcFile);
-        }
-    }
-
-    private Path getDestPathFromScript(FileStatus srcFile) throws IOException {
-        Path p = new Path(ScriptExecutor.getDestFileFromScript(script, srcFile, 60, TimeUnit.SECONDS));
-        if(p.toUri().getScheme() == null) {
-            throw new IOException("Destination path from script must be a URI with a scheme: '" + p + "'");
-        }
-        destFs = FileSystem.get(p.toUri(), config);
-        return p;
+        programmaticShutdown.set(true);
     }
 
     public static void main(String... args) {

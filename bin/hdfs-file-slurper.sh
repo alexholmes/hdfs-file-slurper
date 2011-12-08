@@ -43,19 +43,10 @@ function add_to_classpath() {
 
 add_to_classpath ${SLURPER_JAR_DIR}
 
+export SLURPER_CLASSPATH=$SLURPER_HOME/conf:$SLURPER_CLASSPATH
+
 export HADOOP_CLASSPATH="${SLURPER_CLASSPATH}:${HADOOP_CLASSPATH}"
 
-"$HADOOP_BIN" jar ${bin}/../dist/lib/* com.alexholmes.hdfsslurper.Slurper  "$@" &
+"$HADOOP_BIN" jar ${bin}/../dist/lib/* com.alexholmes.hdfsslurper.Slurper  "$@"
+#"$HADOOP_BIN" jar ${bin}/../dist/lib/* com.alexholmes.hdfsslurper.Slurper  "$@" &
 
-pid=$!
-echo $pid > $pidfile
-
-wait $pid
-
-exitCode=$?
-
-if [ -f "$pidfile" ]; then
-  rm $pidfile
-fi
-
-exit $exitCode
