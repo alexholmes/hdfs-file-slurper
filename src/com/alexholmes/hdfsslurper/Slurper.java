@@ -280,6 +280,8 @@ public class Slurper {
         FileSystemManager fileSystemManager = new FileSystemManager(config, srcDir, workDir, completeDir, errorDir,
                 destDir, remove);
 
+        fileSystemManager.moveWorkFilesToError();
+
         final List<WorkerThread> workerThreads = new ArrayList<WorkerThread>();
         for (int i = 1; i <= numThreads; i++) {
             WorkerThread t = new WorkerThread(config, verify, doneFile, script, codec, fileSystemManager,
@@ -296,13 +298,11 @@ public class Slurper {
                     if (programmaticShutdown.get()) {
                         log.info("JVM shutting down");
                     } else {
-                        log.info("External process signalled JVM shutdown, signalling to threads");
+                        log.info("External process signalled JVM shutdown, shutting down threads.");
+                        log.info("This may take a few minutes until we let the threads complete ");
+                        log.info("the current file being copied.");
                         for (WorkerThread workerThread : workerThreads) {
                             workerThread.shutdown();
-                        }
-                        log.info("Waiting for threads to shutdown");
-                        for (WorkerThread workerThread : workerThreads) {
-                            workerThread.join();
                         }
                         log.info("Threads dead");
                     }
@@ -312,6 +312,8 @@ public class Slurper {
 
             }
         });
+
+        log.info("Running");
 
         for (WorkerThread workerThread : workerThreads) {
             workerThread.join();

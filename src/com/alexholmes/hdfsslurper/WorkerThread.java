@@ -69,7 +69,7 @@ public class WorkerThread extends Thread {
         this.pollSleepUnit = pollSleepUnit;
         this.pollSleepPeriod = pollSleepPeriod;
         this.setDaemon(true);
-        this.setName(WorkerThread.class.getName() + "-" + threadIndex);
+        this.setName(WorkerThread.class.getSimpleName() + "-" + threadIndex);
     }
 
     @Override
@@ -82,6 +82,7 @@ public class WorkerThread extends Thread {
         } catch (InterruptedException t) {
             log.warn("Caught interrupted exception, exiting");
         }
+        log.info("Thread exiting");
     }
 
     private void doWork() throws InterruptedException {
@@ -103,12 +104,14 @@ public class WorkerThread extends Thread {
         }
     }
 
-    private void copyFile(FileStatus fs) throws IOException, InterruptedException {
-        try {
-            process(fs);
-        } catch (Throwable t) {
-            log.warn("Caught exception working on file " + fs.getPath(), t);
-            fileSystemManager.fileCopyError(fs);
+    private synchronized void copyFile(FileStatus fs) throws IOException, InterruptedException {
+        if (!shuttingDown.get() && !interrupted()) {
+            try {
+                process(fs);
+            } catch (Throwable t) {
+                log.warn("Caught exception working on file " + fs.getPath(), t);
+                fileSystemManager.fileCopyError(fs);
+            }
         }
     }
 
@@ -228,9 +231,11 @@ public class WorkerThread extends Thread {
         return p;
     }
 
-    public void shutdown() throws InterruptedException {
+    public synchronized void shutdown() throws InterruptedException {
         if (!shuttingDown.getAndSet(true)) {
+            log.info("Interrupting: " + this.getName());
             this.interrupt();
+            log.info("Joining: " + this.getName());
             this.join();
         }
     }

@@ -137,4 +137,17 @@ public class FileSystemManager {
     public Path getDestinationDirectory() {
         return destinationDirectory;
     }
+
+    public void moveWorkFilesToError() throws IOException, InterruptedException {
+        for (FileStatus fs : sourceFileSystem.listStatus(workDirectory)) {
+            if (!fs.isDir()) {
+                if (fs.getPath().getName().startsWith(".")) {
+                    log.debug("Ignoring hidden file '" + fs.getPath() + "'");
+                    continue;
+                }
+
+                fileCopyError(fs);
+            }
+        }
+    }
 }
