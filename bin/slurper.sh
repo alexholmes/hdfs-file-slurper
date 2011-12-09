@@ -94,7 +94,7 @@ add_to_hadoop_classpath ${HADOOP_LIB_DIR}
 
 SLURPER_JAR="${BASEDIR}/dist/lib/*"
 
-export CLASSPATH=${BASEDIR}/conf:${SLURPER_JAR}:${HADOOP_CONF_DIR}:${HADOOP_CLASSPATH}:${SLURPER_CLASSPATH}
+export CLASSPATH=${SLURPER_JAR}:${HADOOP_CONF_DIR}:${HADOOP_CLASSPATH}:${SLURPER_CLASSPATH}
 
 JAVA=$JAVA_HOME/bin/java
 JAVA_HEAP_MAX=-Xmx512m
@@ -129,6 +129,7 @@ errfile=$BASEDIR/logs/slurper-$date.err
 
 case "$mode" in
   normal)
+    export CLASSPATH=${BASEDIR}/conf/normal:${CLASSPATH}
     "$JAVA" $JAVA_HEAP_MAX -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@"
   ;;
   daemon)
@@ -143,6 +144,7 @@ case "$mode" in
       echo "Pid file $pidfile exists but PID $pid no longer seems to be running, ignoring PID file"
     fi
 
+    export CLASSPATH=${BASEDIR}/conf/daemon:${CLASSPATH}
     nohup "$JAVA" $JAVA_HEAP_MAX -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" > $outfile 2> $errfile < /dev/null &
     pid=$!
 
