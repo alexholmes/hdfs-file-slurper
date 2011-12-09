@@ -280,6 +280,8 @@ public class Slurper {
         FileSystemManager fileSystemManager = new FileSystemManager(config, srcDir, workDir, completeDir, errorDir,
                 destDir, remove);
 
+        log.info("Moving any files in work directory to error directory");
+
         fileSystemManager.moveWorkFilesToError();
 
         final List<WorkerThread> workerThreads = new ArrayList<WorkerThread>();
