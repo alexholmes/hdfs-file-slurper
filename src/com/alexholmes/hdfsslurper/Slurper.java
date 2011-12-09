@@ -46,7 +46,7 @@ public class Slurper {
     private boolean remove;
     private boolean doneFile;
     private boolean verify;
-    private int numThreads;
+    private int numThreads = 1;
     private long pollSleepPeriodMillis = 1000;
     private boolean daemon;
     FileSystem srcFs;
@@ -97,7 +97,6 @@ public class Slurper {
         options.addOption(createRequiredOption("s", ARGS_SOURCE_DIR, true, "Source directory.  " + fullyQualifiedURIStory));
         options.addOption(createRequiredOption("w", ARGS_WORK_DIR, true, "Work directory.  " + fullyQualifiedURIStory));
         options.addOption(createRequiredOption("e", ARGS_ERROR_DIR, true, "Error directory.  " + fullyQualifiedURIStory));
-        options.addOption(createRequiredOption("x", ARGS_WORKER_THREADS, true, "The number of worker threads"));
 
         // optional arguments
         //
@@ -109,6 +108,7 @@ public class Slurper {
         options.addOption("v", ARGS_VERIFY, false, "Verify the file after it has been copied.  This is slow as it " +
                 "involves reading the entire destination file after the copy has completed. (Optional)");
         options.addOption("p", ARGS_POLL_PERIOD_MILLIS, false, "The time threads wait in milliseconds between polling the file system for new files. (Optional)");
+        options.addOption("x", ARGS_WORKER_THREADS, true, "The number of worker threads.  (Optional)");
 
         // mutually exclusive arguments.  one of them must be defined
         //
@@ -166,11 +166,10 @@ public class Slurper {
             pollSleepPeriodMillis = Integer.valueOf(commandLine.getOptionValue(ARGS_POLL_PERIOD_MILLIS));
         }
 
-        if (!commandLine.hasOption(ARGS_WORKER_THREADS)) {
-            log.error(ARGS_WORKER_THREADS + " must be set");
-            printUsageAndExit(options, 4);
+        if (commandLine.hasOption(ARGS_WORKER_THREADS)) {
+            numThreads = Integer.valueOf(commandLine.getOptionValue(ARGS_WORKER_THREADS));
         }
-        numThreads = Integer.valueOf(commandLine.getOptionValue(ARGS_WORKER_THREADS));
+
 
 
         if (commandLine.hasOption(ARGS_COMPRESS)) {
