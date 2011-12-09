@@ -187,7 +187,7 @@ public class Slurper {
             printUsageAndExit(options, 2);
         }
 
-        validateLocalSrcDir();
+        validateSrcDir();
         validateDirectories();
 
         // make sure one of these has been set
@@ -215,7 +215,7 @@ public class Slurper {
 
     }
 
-    private void validateLocalSrcDir() throws IOException {
+    private void validateSrcDir() throws IOException {
         checkScheme(srcDir, "source directory");
         srcFs = FileSystem.get(srcDir.toUri(), new Configuration());
         if (!srcFs.exists(srcDir) || !srcFs.getFileStatus(srcDir).isDir()) {
