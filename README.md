@@ -7,24 +7,23 @@ Many projects require an automated mechanism to copy files between HDFS from loc
 roll your own code, or use something like Flume which may be overkill if that's your sole usage.
 This is a light-weight utility which simply copies all the files in a source directory into a destination directory.
 The source or destination directories can be local, HDFS, or any other Hadoop FileSystem.
-It can be easily run from cron.
 
 ## Features
 
 * After a successful file copy you can either remove the source file, or have it moved into another directory.
 * Destination files can be compressed as part of the write codec with any compression codec which extends `org.apache.hadoop.io.compress.CompressionCodec`.
-* A dry-run mode which will simply echo the copy operations, but not execute them.
-* Cron/scheduler support by use of a PID file to prevent from multiple concurrent execution.
 * Capability to write "done" file after completion of copy
 * Verify destination file post-copy with CRC32 checksum comparison with source
 * Ignores hidden files (filenames that start with ".")
-* It is extensible in that you can tell it to call a script for every local file to determine the
-location of the destination file.  Or alternatively let the utility know a single destination directory
+* Customizable destination via a script which can be called for every source file.  Or alternatively let the utility
+know a single destination directory
 and all files are copied into that location.
+* A daemon mode which will `nohup` the process and keep polling for files in the source directory
+* Multi-threaded data transfer
 
 ## Important Considerations
 
-When using this utility, as well as in general when dealing with the automated ingress of files, it's probably
+When using this utility, as well as in general when dealing with the automated transfer of files, it's probably
 worth bearing the following items in mind.
 
 * Files must be moved into the source directory, which is an atomic operation in Linux and HDFS.  If files are copied or
@@ -36,9 +35,9 @@ write is complete remove the leading period from the filename at which point it 
  sense for your data.  For example if you are moving log files into HDFS, then you may want to extract the date/time from
  the filename and write all files for a given day into a separate directory.
 *  If your files are small in size then you may want to consider aggregating them together.  HDFS and MapReduce don't
-work well with large numbers of small files.
+work well with large numbers of small files.  This utility doesn't currently support such aggregation.
 * Subdirectories and their contents aren't currently supported
-* Source, complete and destination paths must all be in HDFS URI form, with a scheme.  For example /tmp on the local
+* All paths must all be in HDFS URI form, with a scheme.  For example /tmp on the local
  filesystem would be `file:/tmp`, and /app in HDFS would be `hdfs:/app` (assuming you wanted to use the default NameNode and
  port settings defined in `core-site.xml` - if you didn't the URI can contain the hostname and port of a different Hadoop cluster).
 
@@ -63,11 +62,18 @@ export HADOOP_BIN=/usr/bin/hadoop
 
 To see all the options available:
 
-<pre><code>usage: Slurper [-c <arg>] [-d] [-i <arg>] [-n] [-o <arg>] [-r] -s <arg>
-       [-t <arg>] [-v]
+<pre><code>usage: Slurper [-a] [-c <arg>] -e <arg> [-i <arg>] [-n] [-o <arg>] [-p]
+       [-r] -s <arg> [-t <arg>] [-v] -w <arg> [-x <arg>]
+ -a,--daemon               Whether to run as a daemon (always up), or just
+                           process the existing files and exit.
  -c,--compress <arg>       The compression codec class (Optional)
- -d,--dry-run              Perform a dry run - do not actually copy the
-                           files (Optional)
+ -e,--error-dir <arg>      Error directory.  This must be a
+                           fully-qualified URI.  For example, for a local
+                           /tmp directory, this would be file:/tmp.  For a
+                           /tmp directory in HDFS, this would be
+                           hdfs://localhost:8020/tmp or hdfs:/tmp if you
+                           wanted to use the NameNode host and port
+                           settings in your core-site.xml file.
  -i,--script <arg>         A shell script which can be called to determine
                            the destination directory.The standard input
                            will contain a single line with the fully
@@ -89,6 +95,9 @@ To see all the options available:
                            successful copy.  Must be in the same
                            filesystem as the source file.  Either this or
                            the "remove" option must be set.
+ -p,--poll-period-millis   The time threads wait in milliseconds between
+                           polling the file system for new files.
+                           (Optional)
  -r,--remove-after-copy    Remove the source file after a successful copy.
                            Either this or the "completedir" option must be
                            set.
@@ -112,34 +121,45 @@ To see all the options available:
                            is slow as it involves reading the entire
                            destination file after the copy has completed.
                            (Optional)
+ -w,--work-dir <arg>       Work directory.  This must be a fully-qualified
+                           URI.  For example, for a local  /tmp directory,
+                           this would be file:/tmp.  For a /tmp directory
+                           in HDFS, this would be
+                           hdfs://localhost:8020/tmp or hdfs:/tmp if you
+                           wanted to use the NameNode host and port
+                           settings in your core-site.xml file.
+ -x,--threads <arg>        The number of worker threads.  (Optional)
 </code></pre>
 
-To run in dryrun mode, and to see what files would be copied from a local directory "/app" into a "/app2" directory in HDFS:
+If you wanted a one-time transfer of files from a local /app/slurper/in directory into a /user/ali/in directory in
+HDFS your usage would look like this:
 
-<pre><code>bin/hdfs-file-slurper.sh --src-dir file:/app --dest-dir hdfs:/app2 --complete-dir file:/completed --dryrun
+<pre><code>bin/hdfs-file-slurper.sh --src-dir file:/app/slurper/in --dest-dir hdfs:/user/ali/in \
+  --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error
 </code></pre>
 
-Simply remove the "--dryrun" option to actually perform the copy.  After a file is copied into HDFS there are two options,
-you can either supply the "--remove" option to remove the source file, or specify the "--complete-dir" directory into which
+After a file is copied into HDFS there are two options for how the source file is handled,
+you can either supply the `--remove` option to remove it, or specify the `--complete-dir` directory (as in our above example) into which
 the file is moved.
 
 
 ### Compression
 
-You can also choose to compress the HDFS output file with the "--compress" option, which takes a Hadoop CompressionCodec
+You can also compress the HDFS output file with the `--compress` option, which takes a Hadoop CompressionCodec
 class.  The default behavior is to append the codec-specific extension to the end of the destination file in HDFS.  If
 you don't want this to occur, you must provide a script and specify an alternative HDFS filename.
-For example to use the default (DEFLATE) compression codec in Hadoop, you would:
+For example to run the same command as above and use the default (DEFLATE) compression codec in Hadoop, you would:
 
-<pre><code>bin/hdfs-file-slurper.sh --src-dir file:/app --dest-dir hdfs:/app2 --complete-dir file:/completed \
---compress org.apache.hadoop.io.compress.DefaultCodec
+<pre><code>bin/hdfs-file-slurper.sh --src-dir file:/app/slurper/in --dest-dir hdfs:/user/ali/in \
+  --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error \
+  --compress org.apache.hadoop.io.compress.DefaultCodec
 </code></pre>
 
 ### Fine-grained control over HDFS file destinations
 
 If you want to have control on a file-by-file basis as to the destination HDFS directory and file, use the
-"--script" option to specify a local executable script.  The local filename will be supplied to the standard input
-of the script, and the script should produce the target HDFS destination file on standard output as a single line.
+"--script" option to specify a local executable script.  The source filename in URI form will be supplied to the standard input
+of the script, and the script should produce the target HDFS destination file in URI form on standard output as a single line.
 
 For example, this is a simple Python script which uses the date in the filename to partition files into separate
 directories in HDFS by date.
@@ -167,7 +187,8 @@ print hdfs_dest,
 And you would use it as follows:
 
 <pre><code>touch /app/apache-2011-02-02.log
-bin/hdfs-file-slurper.sh --src-dir file:/app --complete-dir /completed --script "/app/hdfs-file-slurper/sample-python.py"
-INFO hdfsslurper.Slurper: Copying source file 'file:/app/apache-2011-02-02.log' to destination 'hdfs:/data/2011-02-02/apache-2011-02-02.log
-</code></pre>
 
+bin/hdfs-file-slurper.sh --src-dir file:/app/slurper/in --script "/app/hdfs-file-slurper/sample-python.py" \
+  --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error
+INFO hdfsslurper.Slurper: Copying source file 'file:/app/slurper/in/apache-2011-02-02.log' to destination 'hdfs:/data/2011-02-02/apache-2011-02-02.log
+</code></pre>
