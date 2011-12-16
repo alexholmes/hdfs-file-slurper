@@ -49,9 +49,10 @@ Apache licensed.
 
 To get started, simply:
 
-1. Download, and run ant
-2. Tarball the directory and copy to a machine that has access to Hadoop, and untar.
-3. Set the `HADOOP_BIN` environment variable to refer to your local hadoop script (not required if you are running a packaged version of CDH).
+1. Download, and run `mvn package`
+2. Copy the generated tarball under `target/` to a machine that has access to Hadoop, and untar.
+3. Set the `HADOOP_BIN` environment variable to refer to your local hadoop script (not required if you are 
+running a packaged version of CDH).
 4. Run!
 
 Example environment setup:
@@ -62,7 +63,8 @@ export HADOOP_BIN=/usr/bin/hadoop
 
 To see all the options available:
 
-<pre><code>usage: Slurper [-a] [-c <arg>] -e <arg> [-i <arg>] [-n] [-o <arg>] [-p]
+<pre><code>bin/slurper.sh
+usage: Slurper [-a] [-c <arg>] -e <arg> [-i <arg>] [-n] [-o <arg>] [-p]
        [-r] -s <arg> [-t <arg>] [-v] -w <arg> [-x <arg>]
  -a,--daemon               Whether to run as a daemon (always up), or just
                            process the existing files and exit.
@@ -134,7 +136,7 @@ To see all the options available:
 If you wanted a one-time transfer of files from a local /app/slurper/in directory into a /user/ali/in directory in
 HDFS your usage would look like this:
 
-<pre><code>bin/hdfs-file-slurper.sh --src-dir file:/app/slurper/in --dest-dir hdfs:/user/ali/in \
+<pre><code>bin/slurper.sh.sh --src-dir file:/app/slurper/in --dest-dir hdfs:/user/ali/in \
   --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error
 </code></pre>
 
@@ -150,7 +152,7 @@ class.  The default behavior is to append the codec-specific extension to the en
 you don't want this to occur, you must provide a script and specify an alternative HDFS filename.
 For example to run the same command as above and use the default (DEFLATE) compression codec in Hadoop, you would:
 
-<pre><code>bin/hdfs-file-slurper.sh --src-dir file:/app/slurper/in --dest-dir hdfs:/user/ali/in \
+<pre><code>bin/slurper.sh.sh --src-dir file:/app/slurper/in --dest-dir hdfs:/user/ali/in \
   --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error \
   --compress org.apache.hadoop.io.compress.DefaultCodec
 </code></pre>
@@ -188,7 +190,7 @@ And you would use it as follows:
 
 <pre><code>touch /app/apache-2011-02-02.log
 
-bin/hdfs-file-slurper.sh --src-dir file:/app/slurper/in --script "/app/hdfs-file-slurper/sample-python.py" \
+bin/slurper.sh.sh --src-dir file:/app/slurper/in --script "/app/slurper.sh/sample-python.py" \
   --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error
 INFO hdfsslurper.Slurper: Copying source file 'file:/app/slurper/in/apache-2011-02-02.log' to destination 'hdfs:/data/2011-02-02/apache-2011-02-02.log
 </code></pre>
