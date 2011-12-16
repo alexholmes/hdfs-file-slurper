@@ -51,7 +51,7 @@ To get started, simply:
 
 1. Download, and run `mvn package`
 2. Copy the generated tarball under `target/` to a machine that has access to Hadoop, and untar.
-3. Set the `HADOOP_BIN` environment variable to refer to your local hadoop script (not required if you are 
+3. Set the `HADOOP_BIN` environment variable to refer to your local hadoop script (not required if you are
 running a packaged version of CDH).
 4. Run!
 
