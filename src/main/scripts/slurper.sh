@@ -52,7 +52,7 @@ BASEDIR=`dirname ${PRG}`
 BASEDIR=`cd ${BASEDIR}/..;pwd`
 SCRIPT=`basename ${PRG}`
 
-echo $BASEDIR
+cd $BASEDIR
 
 CDH_HADOOP_HOME=/usr/lib/hadoop
 
