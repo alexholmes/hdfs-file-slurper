@@ -59,6 +59,7 @@ public class Slurper {
     public static final String ARGS_DEST_DIR = "dest-dir";
     public static final String ARGS_COMPRESS = "compress";
     public static final String ARGS_DAEMON = "daemon";
+    public static final String ARGS_DAEMON_NO_BACKGROUND = "daemon-no-bkgrnd";
     public static final String ARGS_CREATE_DONE_FILE = "create-done-file";
     public static final String ARGS_VERIFY = "verify";
     public static final String ARGS_REMOVE_AFTER_COPY = "remove-after-copy";
@@ -71,6 +72,7 @@ public class Slurper {
     private void printUsageAndExit(Options options, int exitCode) {
         HelpFormatter formatter = new HelpFormatter();
         formatter.printHelp("Slurper", options, true);
+        log.info("Exiting");
         System.exit(exitCode);
     }
 
@@ -100,7 +102,8 @@ public class Slurper {
 
         // optional arguments
         //
-        options.addOption("a", ARGS_DAEMON, false, "Whether to run as a daemon (always up), or just process the existing files and exit.");
+        options.addOption("a", ARGS_DAEMON, false, "Whether to run as a daemon (always up), or just process the existing files and exit.  This option will also 'nohup' the process");
+        options.addOption("u", ARGS_DAEMON_NO_BACKGROUND, false, "Whether to run as a daemon (always up), or just process the existing files and exit.  This option is suitable for inittab respawn execution, where the Java process isn't launched in the background.");
         options.addOption("c", ARGS_COMPRESS, true, "The compression codec class (Optional)");
         options.addOption("n", ARGS_CREATE_DONE_FILE, false, "Touch a file in the destination directory after the file " +
                 "copy process has completed.  The done filename is the same as the destination file appended " +
@@ -160,7 +163,7 @@ public class Slurper {
             completeDir = new Path(dir);
         }
 
-        daemon = commandLine.hasOption(ARGS_DAEMON);
+        daemon = commandLine.hasOption(ARGS_DAEMON) || commandLine.hasOption(ARGS_DAEMON_NO_BACKGROUND);
 
         if (commandLine.hasOption(ARGS_POLL_PERIOD_MILLIS)) {
             pollSleepPeriodMillis = Integer.valueOf(commandLine.getOptionValue(ARGS_POLL_PERIOD_MILLIS));

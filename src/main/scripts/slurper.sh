@@ -30,6 +30,8 @@ mode=normal
 for i in $*; do
   if [ "--daemon" = "$i" ]; then
     mode=daemon
+  elif [ "--daemon-no-bkgrnd" = "$i" ]; then
+    mode=daemon-no-bkgrnd
   fi
 done
 
@@ -48,6 +50,7 @@ done
 
 BASEDIR=`dirname ${PRG}`
 BASEDIR=`cd ${BASEDIR}/..;pwd`
+SCRIPT=`basename ${PRG}`
 
 echo $BASEDIR
 
@@ -132,8 +135,12 @@ case "$mode" in
     export CLASSPATH=${BASEDIR}/conf/normal:${CLASSPATH}
     "$JAVA" $JAVA_HEAP_MAX -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@"
   ;;
+  daemon-no-bkgrnd)
+    export CLASSPATH=${BASEDIR}/conf/daemon:${CLASSPATH}
+    nohup "$JAVA" $JAVA_HEAP_MAX -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" > $outfile 2> $errfile < /dev/null
+  ;;
   daemon)
-    pidfile=$BASEDIR/$script.pid
+    pidfile=$BASEDIR/$SCRIPT.pid
 
     if [ -f "$pidfile" ]; then
       pid=`cat $pidfile`

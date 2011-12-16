@@ -19,6 +19,7 @@ The source or destination directories can be local, HDFS, or any other Hadoop Fi
 know a single destination directory
 and all files are copied into that location.
 * A daemon mode which will `nohup` the process and keep polling for files in the source directory
+* A daemon mode which is compatible with `inittab` respawn
 * Multi-threaded data transfer
 
 ## Important Considerations
@@ -65,9 +66,10 @@ To see all the options available:
 
 <pre><code>bin/slurper.sh
 usage: Slurper [-a] [-c <arg>] -e <arg> [-i <arg>] [-n] [-o <arg>] [-p]
-       [-r] -s <arg> [-t <arg>] [-v] -w <arg> [-x <arg>]
+       [-r] -s <arg> [-t <arg>] [-u] [-v] -w <arg> [-x <arg>]
  -a,--daemon               Whether to run as a daemon (always up), or just
-                           process the existing files and exit.
+                           process the existing files and exit.  This
+                           option will also 'nohup' the process
  -c,--compress <arg>       The compression codec class (Optional)
  -e,--error-dir <arg>      Error directory.  This must be a
                            fully-qualified URI.  For example, for a local
@@ -119,6 +121,11 @@ usage: Slurper [-a] [-c <arg>] -e <arg> [-i <arg>] [-n] [-o <arg>] [-p]
                            or hdfs:/tmp if you wanted to use the NameNode
                            host and port settings in your core-site.xml
                            file.
+ -u,--daemon-no-bkgrnd     Whether to run as a daemon (always up), or just
+                           process the existing files and exit.  This
+                           option is suitable for inittab respawn
+                           execution, where the Java process isn't
+                           launched in the background.
  -v,--verify               Verify the file after it has been copied.  This
                            is slow as it involves reading the entire
                            destination file after the copy has completed.
