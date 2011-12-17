@@ -42,6 +42,7 @@ public class Slurper {
     private Path completeDir;
     private Path errorDir;
     private Path destDir;
+    private Path destStagingDir;
     private String script;
     private boolean remove;
     private boolean doneFile;
@@ -57,6 +58,7 @@ public class Slurper {
     public static final String ARGS_SOURCE_DIR = "src-dir";
     public static final String ARGS_WORK_DIR = "work-dir";
     public static final String ARGS_DEST_DIR = "dest-dir";
+    public static final String ARGS_DEST_STAGING_DIR = "dest-staging-dir";
     public static final String ARGS_COMPRESS = "compress";
     public static final String ARGS_DAEMON = "daemon";
     public static final String ARGS_DAEMON_NO_BACKGROUND = "daemon-no-bkgrnd";
@@ -99,6 +101,7 @@ public class Slurper {
         options.addOption(createRequiredOption("s", ARGS_SOURCE_DIR, true, "Source directory.  " + fullyQualifiedURIStory));
         options.addOption(createRequiredOption("w", ARGS_WORK_DIR, true, "Work directory.  " + fullyQualifiedURIStory));
         options.addOption(createRequiredOption("e", ARGS_ERROR_DIR, true, "Error directory.  " + fullyQualifiedURIStory));
+        options.addOption(createRequiredOption("g", ARGS_DEST_STAGING_DIR, true, "Staging directory.  Files are first copied into this directory, and after the copy has been completed and verified, they are moved into the destination directory.  " + fullyQualifiedURIStory));
 
         // optional arguments
         //
@@ -157,6 +160,7 @@ public class Slurper {
         srcDir = new Path(getRequiredOption(commandLine, ARGS_SOURCE_DIR));
         workDir = new Path(getRequiredOption(commandLine, ARGS_WORK_DIR));
         errorDir = new Path(getRequiredOption(commandLine, ARGS_ERROR_DIR));
+        destStagingDir = new Path(getRequiredOption(commandLine, ARGS_DEST_STAGING_DIR));
 
         String dir = commandLine.getOptionValue(ARGS_COMPLETE_DIR);
         if (dir != null) {
@@ -243,7 +247,7 @@ public class Slurper {
         }
     }
 
-    private void testCreateDir(Path p) throws IOException {
+    private void testCreateSrcDir(Path p) throws IOException {
         if (srcFs.exists(p) && !srcFs.getFileStatus(p).isDir()) {
             log.error("Directory appears to be a file: " + p);
             printUsageAndExit(options, 40);
@@ -262,12 +266,16 @@ public class Slurper {
         validateSameFileSystem(srcDir, workDir);
         validateSameFileSystem(srcDir, errorDir);
 
-        testCreateDir(workDir);
-        testCreateDir(errorDir);
+        if(destDir != null) {
+            validateSameFileSystem(destDir, destStagingDir);
+        }
+
+        testCreateSrcDir(workDir);
+        testCreateSrcDir(errorDir);
 
         if (!remove) {
             validateSameFileSystem(srcDir, completeDir);
-            testCreateDir(completeDir);
+            testCreateSrcDir(completeDir);
         }
     }
 
@@ -280,7 +288,7 @@ public class Slurper {
     private void run() throws IOException, InterruptedException {
 
         FileSystemManager fileSystemManager = new FileSystemManager(config, srcDir, workDir, completeDir, errorDir,
-                destDir, remove);
+                destDir, destStagingDir, remove);
 
         log.info("Moving any files in work directory to error directory");
 

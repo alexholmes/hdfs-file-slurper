@@ -38,18 +38,20 @@ public class FileSystemManager {
     private final Path completedDirectory;
     private final Path errorDirectory;
     private final Path destinationDirectory;
+    private final Path destStagingDir;
     private final boolean removeFileAfterCopy;
     private final FileSystem sourceFileSystem;
 
     private final ReentrantLock inboundDirLock = new ReentrantLock();
 
-    public FileSystemManager(Configuration conf, Path inboundDirectory, Path workDirectory, Path completedDirectory, Path errorDirectory, Path destinationDirectory, boolean removeFileAfterCopy) throws IOException {
+    public FileSystemManager(Configuration conf, Path inboundDirectory, Path workDirectory, Path completedDirectory, Path errorDirectory, Path destinationDirectory, Path destStagingDir, boolean removeFileAfterCopy) throws IOException {
         this.config = conf;
         this.inboundDirectory = inboundDirectory;
         this.workDirectory = workDirectory;
         this.completedDirectory = completedDirectory;
         this.errorDirectory = errorDirectory;
         this.destinationDirectory = destinationDirectory;
+        this.destStagingDir = destStagingDir;
         this.removeFileAfterCopy = removeFileAfterCopy;
         sourceFileSystem = inboundDirectory.getFileSystem(config);
     }
@@ -149,5 +151,10 @@ public class FileSystemManager {
                 fileCopyError(fs);
             }
         }
+    }
+
+    public Path getStagingFile(FileStatus srcFileStatus, Path destFile) {
+        int hash = (srcFileStatus.getPath().toString() + destFile.toString()).hashCode();
+        return new Path(destStagingDir, String.valueOf(hash));
     }
 }

@@ -65,86 +65,108 @@ export HADOOP_BIN=/usr/bin/hadoop
 To see all the options available:
 
 <pre><code>bin/slurper.sh
-usage: Slurper [-a] [-c <arg>] -e <arg> [-i <arg>] [-n] [-o <arg>] [-p]
-       [-r] -s <arg> [-t <arg>] [-u] [-v] -w <arg> [-x <arg>]
- -a,--daemon               Whether to run as a daemon (always up), or just
-                           process the existing files and exit.  This
-                           option will also 'nohup' the process
- -c,--compress <arg>       The compression codec class (Optional)
- -e,--error-dir <arg>      Error directory.  This must be a
-                           fully-qualified URI.  For example, for a local
-                           /tmp directory, this would be file:/tmp.  For a
-                           /tmp directory in HDFS, this would be
-                           hdfs://localhost:8020/tmp or hdfs:/tmp if you
-                           wanted to use the NameNode host and port
-                           settings in your core-site.xml file.
- -i,--script <arg>         A shell script which can be called to determine
-                           the destination directory.The standard input
-                           will contain a single line with the fully
-                           qualified URI of the source file, and the
-                           script must put the destination  full path on
-                           standard output. This must be a fully-qualified
-                           URI.  For example, for a local  /tmp directory,
-                           this would be file:/tmp.  For a /tmp directory
-                           in HDFS, this would be
-                           hdfs://localhost:8020/tmp or hdfs:/tmp if you
-                           wanted to use the NameNode host and port
-                           settings in your core-site.xml file.  Either
-                           this or the "hdfsdif" option must be set.
- -n,--create-done-file     Touch a file in the destination directory after
-                           the file copy process has completed.  The done
-                           filename is the same as the destination file
-                           appended with ".done" (Optional)
- -o,--complete-dir <arg>   Completion directory where file is moved after
-                           successful copy.  Must be in the same
-                           filesystem as the source file.  Either this or
-                           the "remove" option must be set.
- -p,--poll-period-millis   The time threads wait in milliseconds between
-                           polling the file system for new files.
-                           (Optional)
- -r,--remove-after-copy    Remove the source file after a successful copy.
-                           Either this or the "completedir" option must be
-                           set.
- -s,--src-dir <arg>        Source directory.  This must be a
-                           fully-qualified URI.  For example, for a local
-                           /tmp directory, this would be file:/tmp.  For a
-                           /tmp directory in HDFS, this would be
-                           hdfs://localhost:8020/tmp or hdfs:/tmp if you
-                           wanted to use the NameNode host and port
-                           settings in your core-site.xml file.
- -t,--dest-dir <arg>       Destination directory where files should be
-                           copied. Either this or the "script" option must
-                           be set. This must be a fully-qualified URI.
-                           For example, for a local  /tmp directory, this
-                           would be file:/tmp.  For a /tmp directory in
-                           HDFS, this would be hdfs://localhost:8020/tmp
-                           or hdfs:/tmp if you wanted to use the NameNode
-                           host and port settings in your core-site.xml
-                           file.
- -u,--daemon-no-bkgrnd     Whether to run as a daemon (always up), or just
-                           process the existing files and exit.  This
-                           option is suitable for inittab respawn
-                           execution, where the Java process isn't
-                           launched in the background.
- -v,--verify               Verify the file after it has been copied.  This
-                           is slow as it involves reading the entire
-                           destination file after the copy has completed.
-                           (Optional)
- -w,--work-dir <arg>       Work directory.  This must be a fully-qualified
-                           URI.  For example, for a local  /tmp directory,
-                           this would be file:/tmp.  For a /tmp directory
-                           in HDFS, this would be
-                           hdfs://localhost:8020/tmp or hdfs:/tmp if you
-                           wanted to use the NameNode host and port
-                           settings in your core-site.xml file.
- -x,--threads <arg>        The number of worker threads.  (Optional)
+usage: Slurper [-a] [-c <arg>] -e <arg> -g <arg> [-i <arg>] [-n] [-o
+       <arg>] [-p] [-r] -s <arg> [-t <arg>] [-u] [-v] -w <arg> [-x <arg>]
+ -a,--daemon                   Whether to run as a daemon (always up), or
+                               just process the existing files and exit.
+                               This option will also 'nohup' the process
+ -c,--compress <arg>           The compression codec class (Optional)
+ -e,--error-dir <arg>          Error directory.  This must be a
+                               fully-qualified URI.  For example, for a
+                               local  /tmp directory, this would be
+                               file:/tmp.  For a /tmp directory in HDFS,
+                               this would be hdfs://localhost:8020/tmp or
+                               hdfs:/tmp if you wanted to use the NameNode
+                               host and port settings in your
+                               core-site.xml file.
+ -g,--dest-staging-dir <arg>   Staging directory.  Files are first copied
+                               into this directory, and after the copy has
+                               been completed and verified, they are moved
+                               into the destination directory.  This must
+                               be a fully-qualified URI.  For example, for
+                               a local  /tmp directory, this would be
+                               file:/tmp.  For a /tmp directory in HDFS,
+                               this would be hdfs://localhost:8020/tmp or
+                               hdfs:/tmp if you wanted to use the NameNode
+                               host and port settings in your
+                               core-site.xml file.
+ -i,--script <arg>             A shell script which can be called to
+                               determine the destination directory.The
+                               standard input will contain a single line
+                               with the fully qualified URI of the source
+                               file, and the script must put the
+                               destination  full path on standard output.
+                               This must be a fully-qualified URI.  For
+                               example, for a local  /tmp directory, this
+                               would be file:/tmp.  For a /tmp directory
+                               in HDFS, this would be
+                               hdfs://localhost:8020/tmp or hdfs:/tmp if
+                               you wanted to use the NameNode host and
+                               port settings in your core-site.xml file.
+                               Either this or the "hdfsdif" option must be
+                               set.
+ -n,--create-done-file         Touch a file in the destination directory
+                               after the file copy process has completed.
+                               The done filename is the same as the
+                               destination file appended with ".done"
+                               (Optional)
+ -o,--complete-dir <arg>       Completion directory where file is moved
+                               after successful copy.  Must be in the same
+                               filesystem as the source file.  Either this
+                               or the "remove" option must be set.
+ -p,--poll-period-millis       The time threads wait in milliseconds
+                               between polling the file system for new
+                               files. (Optional)
+ -r,--remove-after-copy        Remove the source file after a successful
+                               copy.  Either this or the "completedir"
+                               option must be set.
+ -s,--src-dir <arg>            Source directory.  This must be a
+                               fully-qualified URI.  For example, for a
+                               local  /tmp directory, this would be
+                               file:/tmp.  For a /tmp directory in HDFS,
+                               this would be hdfs://localhost:8020/tmp or
+                               hdfs:/tmp if you wanted to use the NameNode
+                               host and port settings in your
+                               core-site.xml file.
+ -t,--dest-dir <arg>           Destination directory where files should be
+                               copied. Either this or the "script" option
+                               must be set. This must be a fully-qualified
+                               URI.  For example, for a local  /tmp
+                               directory, this would be file:/tmp.  For a
+                               /tmp directory in HDFS, this would be
+                               hdfs://localhost:8020/tmp or hdfs:/tmp if
+                               you wanted to use the NameNode host and
+                               port settings in your core-site.xml file.
+ -u,--daemon-no-bkgrnd         Whether to run as a daemon (always up), or
+                               just process the existing files and exit.
+                               This option is suitable for inittab respawn
+                               execution, where the Java process isn't
+                               launched in the background.
+ -v,--verify                   Verify the file after it has been copied.
+                               This is slow as it involves reading the
+                               entire destination file after the copy has
+                               completed. (Optional)
+ -w,--work-dir <arg>           Work directory.  This must be a
+                               fully-qualified URI.  For example, for a
+                               local  /tmp directory, this would be
+                               file:/tmp.  For a /tmp directory in HDFS,
+                               this would be hdfs://localhost:8020/tmp or
+                               hdfs:/tmp if you wanted to use the NameNode
+                               host and port settings in your
+                               core-site.xml file.
+ -x,--threads <arg>            The number of worker threads.  (Optional)
 </code></pre>
 
 If you wanted a one-time transfer of files from a local /app/slurper/in directory into a /user/ali/in directory in
 HDFS your usage would look like this:
 
-<pre><code>bin/slurper.sh.sh --src-dir file:/app/slurper/in --dest-dir hdfs:/user/ali/in \
-  --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error
+<pre><code>bin/slurper.sh.sh \
+  --src-dir file:/app/slurper/in \
+  --dest-dir hdfs:/user/ali/in \
+  --dest-staging-dir hdfs:/user/ali/staging \
+  --work-dir file:/app/slurper/work \
+  --complete-dir file:/app/slurper/complete \
+  --error-dir file:/app/slurper/error
 </code></pre>
 
 After a file is copied into HDFS there are two options for how the source file is handled,
@@ -159,8 +181,13 @@ class.  The default behavior is to append the codec-specific extension to the en
 you don't want this to occur, you must provide a script and specify an alternative HDFS filename.
 For example to run the same command as above and use the default (DEFLATE) compression codec in Hadoop, you would:
 
-<pre><code>bin/slurper.sh.sh --src-dir file:/app/slurper/in --dest-dir hdfs:/user/ali/in \
-  --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error \
+<pre><code>bin/slurper.sh.sh \
+  --src-dir file:/app/slurper/in \
+  --dest-dir hdfs:/user/ali/in \
+  --dest-staging-dir hdfs:/user/ali/staging \
+  --work-dir file:/app/slurper/work \
+  --complete-dir file:/app/slurper/complete \
+  --error-dir file:/app/slurper/error \
   --compress org.apache.hadoop.io.compress.DefaultCodec
 </code></pre>
 
@@ -197,7 +224,12 @@ And you would use it as follows:
 
 <pre><code>touch /app/apache-2011-02-02.log
 
-bin/slurper.sh.sh --src-dir file:/app/slurper/in --script "/app/slurper.sh/sample-python.py" \
-  --work-dir file:/app/slurper/work  --complete-dir file:/app/slurper/complete --error-dir file:/app/slurper/error
+bin/slurper.sh.sh \
+  --src-dir file:/app/slurper/in \
+  --script "/app/slurper.sh/sample-python.py" \
+  --dest-staging-dir hdfs:/user/ali/staging \
+  --work-dir file:/app/slurper/work  \
+  --complete-dir file:/app/slurper/complete \
+  --error-dir file:/app/slurper/error
 INFO hdfsslurper.Slurper: Copying source file 'file:/app/slurper/in/apache-2011-02-02.log' to destination 'hdfs:/data/2011-02-02/apache-2011-02-02.log
 </code></pre>

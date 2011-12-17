@@ -126,15 +126,29 @@ public class WorkerThread extends Thread {
 
         FileSystem destFs = destFile.getFileSystem(config);
 
-        log.info("Copying source file '" + srcFile + "' to destination '" + destFile + "'");
+        // get the staging HDFS file
+        //
+        Path stagingFile = fileSystemManager.getStagingFile(srcFileStatus, destFile);
 
-        // if the directory of the target HDFS file doesn't exist, attempt to create it
+        log.info("Copying source file '" + srcFile + "' to staging destination '" + stagingFile + "'");
+
+        // if the directory of the target file doesn't exist, attempt to create it
         //
         Path destParentDir = destFile.getParent();
         if (!destFs.exists(destParentDir)) {
-            log.info("Attempting creation of HDFS target directory: " + destParentDir);
+            log.info("Attempting creation of target directory: " + destParentDir.toUri());
             if (!destFs.mkdirs(destParentDir)) {
-                throw new IOException("Failed to create target directory in HDFS: " + destParentDir);
+                throw new IOException("Failed to create target directory: " + destParentDir.toUri());
+            }
+        }
+
+        // if the staging directory doesn't exist, attempt to create it
+        //
+        Path destStagingParentDir = stagingFile.getParent();
+        if (!destFs.exists(destStagingParentDir)) {
+            log.info("Attempting creation of staging directory: " + destStagingParentDir.toUri());
+            if (!destFs.mkdirs(destStagingParentDir)) {
+                throw new IOException("Failed to create staging directory: " + destParentDir.toUri());
             }
         }
 
@@ -148,7 +162,7 @@ public class WorkerThread extends Thread {
             if (verifyCopy) {
                 is = new CheckedInputStream(is, crc);
             }
-            os = destFs.create(destFile);
+            os = destFs.create(stagingFile);
 
             if (codec != null) {
                 os = codec.createOutputStream(os);
@@ -161,7 +175,7 @@ public class WorkerThread extends Thread {
         }
 
         long srcFileSize = srcFs.getFileStatus(srcFile).getLen();
-        long destFileSize = destFs.getFileStatus(destFile).getLen();
+        long destFileSize = destFs.getFileStatus(stagingFile).getLen();
         if (codec == null && srcFileSize != destFileSize) {
             throw new IOException("File sizes don't match, source = " + srcFileSize + ", dest = " + destFileSize);
         }
@@ -169,16 +183,25 @@ public class WorkerThread extends Thread {
         log.info("Local file size = " + srcFileSize + ", HDFS file size = " + destFileSize);
 
         if (verifyCopy) {
-            verify(destFile, crc.getValue());
+            verify(stagingFile, crc.getValue());
         }
 
-        fileSystemManager.fileCopyComplete(srcFileStatus);
+        if(destFs.exists(destFile)) {
+            destFs.delete(destFile, false);
+        }
+
+        log.info("Moving staging file '" + stagingFile + "' to destination '" + destFile + "'");
+        if(!destFs.rename(stagingFile, destFile)) {
+            throw new IOException("Failed to rename file");
+        }
 
         if (createDoneFile) {
             Path doneFile = new Path(destFile.getParent(), destFile.getName() + ".done");
             log.info("Touching done file " + doneFile);
             touch(doneFile);
         }
+
+        fileSystemManager.fileCopyComplete(srcFileStatus);
     }
 
     private void verify(Path hdfs, long localFileCRC) throws IOException {
