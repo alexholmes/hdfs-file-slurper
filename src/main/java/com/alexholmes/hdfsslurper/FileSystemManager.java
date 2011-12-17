@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -154,7 +155,7 @@ public class FileSystemManager {
     }
 
     public Path getStagingFile(FileStatus srcFileStatus, Path destFile) {
-        int hash = (srcFileStatus.getPath().toString() + destFile.toString()).hashCode();
+        int hash = Math.abs((srcFileStatus.getPath().toString() + destFile.toString()).hashCode() + new Random().nextInt());
         return new Path(destStagingDir, String.valueOf(hash));
     }
 }
