@@ -208,6 +208,7 @@
 
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
+                <version>${maven.assembly.version}</version>
                 <configuration>
                     <descriptors>
                         <descriptor>src/main/assembly/package.xml</descriptor>
