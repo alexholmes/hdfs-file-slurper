@@ -15,6 +15,7 @@
         <compile.source.version>1.6</compile.source.version>
         <maven.assembly.version>2.2.1</maven.assembly.version>
         <maven.compiler>2.0.2</maven.compiler>
+        <maven.dependency.plugin.version>2.4</maven.dependency.plugin.version>
         <maven.jar.plugin.version>2.2</maven.jar.plugin.version>
         <maven.javadoc.version>2.8</maven.javadoc.version>
         <maven.jxr.plugin.version>2.3</maven.jxr.plugin.version>
@@ -174,6 +175,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven.dependency.plugin.version}</version>
                 <executions>
                     <execution>
                         <id>copy-dependencies</id>
@@ -208,6 +210,7 @@
 
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
+                <version>${maven.assembly.version}</version>
                 <configuration>
                     <descriptors>
                         <descriptor>src/main/assembly/package.xml</descriptor>
@@ -224,6 +227,39 @@
             </plugin>
 
         </plugins>
+
+        <!-- the following m2e settings fix the Eclipse error:
+             "maven-dependency-plugin (goals "copy-dependencies", "unpack")
+             is not supported by m2e."
+        -->
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.eclipse.m2e</groupId>
+                    <artifactId>lifecycle-mapping</artifactId>
+                    <version>1.0.0</version>
+                    <configuration>
+                        <lifecycleMappingMetadata>
+                            <pluginExecutions>
+                                <pluginExecution>
+                                    <pluginExecutionFilter>
+                                        <groupId>org.apache.maven.plugins</groupId>
+                                        <artifactId>maven-dependency-plugin</artifactId>
+                                        <versionRange>[2.0,)</versionRange>
+                                        <goals>
+                                            <goal>copy-dependencies</goal>
+                                        </goals>
+                                    </pluginExecutionFilter>
+                                    <action>
+                                        <execute />
+                                    </action>
+                                </pluginExecution>
+                            </pluginExecutions>
+                        </lifecycleMappingMetadata>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
 
     </build>
 
