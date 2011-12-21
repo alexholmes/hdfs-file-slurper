@@ -28,6 +28,13 @@ mode=normal
 # in daemon mode
 #
 for i in $*; do
+  if [ "$datasourcearg" == "1" ]; then
+    datasource=$i
+    datasourcearg=0
+  fi
+  if [ "--datasource-name" = "$i" ]; then
+    datasourcearg=1
+  fi
   if [ "--daemon" = "$i" ]; then
     mode=daemon
   elif [ "--daemon-no-bkgrnd" = "$i" ]; then
@@ -133,14 +140,14 @@ errfile=$BASEDIR/logs/slurper-$date.err
 case "$mode" in
   normal)
     export CLASSPATH=${BASEDIR}/conf/normal:${CLASSPATH}
-    "$JAVA" $JAVA_HEAP_MAX -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@"
+    "$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/normal/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@"
   ;;
   daemon-no-bkgrnd)
     export CLASSPATH=${BASEDIR}/conf/daemon:${CLASSPATH}
-    nohup "$JAVA" $JAVA_HEAP_MAX -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" > $outfile 2> $errfile < /dev/null
+    nohup "$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/daemon/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" > $outfile 2> $errfile < /dev/null
   ;;
   daemon)
-    pidfile=$BASEDIR/$SCRIPT.pid
+    pidfile=$BASEDIR/$SCRIPT-$datasource.pid
 
     if [ -f "$pidfile" ]; then
       pid=`cat $pidfile`
@@ -152,12 +159,12 @@ case "$mode" in
     fi
 
     export CLASSPATH=${BASEDIR}/conf/daemon:${CLASSPATH}
-    nohup "$JAVA" $JAVA_HEAP_MAX -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" > $outfile 2> $errfile < /dev/null &
+    nohup "$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/daemon/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" > $outfile 2> $errfile < /dev/null &
     pid=$!
 
     echo $pid > $pidfile
 
-    echo "Slurper daemon running as pid ${pid}"
+    echo "Slurper daemon running as pid ${pid} (pid file = $pidfile)"
   ;;
   *)
     echo "Unexpected execution mode: '$mode'"

@@ -17,6 +17,7 @@
 package com.alexholmes.hdfsslurper;
 
 import org.apache.commons.cli.*;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -25,11 +26,15 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.log4j.PropertyConfigurator;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -61,6 +66,7 @@ public class Slurper {
     public static final String ARGS_DEST_STAGING_DIR = "dest-staging-dir";
     public static final String ARGS_COMPRESS = "compress";
     public static final String ARGS_DAEMON = "daemon";
+    public static final String ARGS_DATASOURCE_NAME = "datasource-name";
     public static final String ARGS_DAEMON_NO_BACKGROUND = "daemon-no-bkgrnd";
     public static final String ARGS_CREATE_DONE_FILE = "create-done-file";
     public static final String ARGS_VERIFY = "verify";
@@ -89,6 +95,20 @@ public class Slurper {
         loadAndValidateOptions(args);
     }
 
+    private void setupLog4j(String datasourceName) throws IOException {
+        String propFile = System.getProperty("slurper.log4j.properties");
+            Properties p = new Properties();
+        InputStream is = null;
+        try {
+            is = new FileInputStream(propFile);
+            p.load(is);
+            p.put( "log.datasource", datasourceName ); // overwrite "log.dir"
+            PropertyConfigurator.configure(p);
+        } finally {
+            IOUtils.closeQuietly(is);
+        }
+    }
+
     private void setupOptions() {
 
         String fullyQualifiedURIStory = "This must be a fully-qualified URI. " +
@@ -98,6 +118,7 @@ public class Slurper {
 
         // required arguments
         //
+        options.addOption(createRequiredOption("d", ARGS_DATASOURCE_NAME, true, "The data source name.  This is used to log slurper activity to a unique log file.  "));
         options.addOption(createRequiredOption("s", ARGS_SOURCE_DIR, true, "Source directory.  " + fullyQualifiedURIStory));
         options.addOption(createRequiredOption("w", ARGS_WORK_DIR, true, "Work directory.  " + fullyQualifiedURIStory));
         options.addOption(createRequiredOption("e", ARGS_ERROR_DIR, true, "Error directory.  " + fullyQualifiedURIStory));
@@ -161,6 +182,7 @@ public class Slurper {
         workDir = new Path(getRequiredOption(commandLine, ARGS_WORK_DIR));
         errorDir = new Path(getRequiredOption(commandLine, ARGS_ERROR_DIR));
         destStagingDir = new Path(getRequiredOption(commandLine, ARGS_DEST_STAGING_DIR));
+        setupLog4j(getRequiredOption(commandLine, ARGS_DATASOURCE_NAME));
 
         String dir = commandLine.getOptionValue(ARGS_COMPLETE_DIR);
         if (dir != null) {

@@ -65,12 +65,15 @@ export HADOOP_BIN=/usr/bin/hadoop
 To see all the options available:
 
 <pre><code>bin/slurper.sh
-usage: Slurper [-a] [-c <arg>] -e <arg> -g <arg> [-i <arg>] [-n] [-o
-       <arg>] [-p] [-r] -s <arg> [-t <arg>] [-u] [-v] -w <arg> [-x <arg>]
+usage: Slurper [-a] [-c <arg>] -d <arg> -e <arg> -g <arg> [-i <arg>] [-n]
+       [-o <arg>] [-p] [-r] -s <arg> [-t <arg>] [-u] [-v] -w <arg> [-x
+       <arg>]
  -a,--daemon                   Whether to run as a daemon (always up), or
                                just process the existing files and exit.
                                This option will also 'nohup' the process
  -c,--compress <arg>           The compression codec class (Optional)
+ -d,--datasource-name <arg>    The data source name.  This is used to log
+                               slurper activity to a unique log file.
  -e,--error-dir <arg>          Error directory.  This must be a
                                fully-qualified URI.  For example, for a
                                local  /tmp directory, this would be
@@ -161,6 +164,7 @@ If you wanted a one-time transfer of files from a local /app/slurper/in director
 HDFS your usage would look like this:
 
 <pre><code>bin/slurper.sh.sh \
+  --datasource-name test \
   --src-dir file:/app/slurper/in \
   --dest-dir hdfs:/user/ali/in \
   --dest-staging-dir hdfs:/user/ali/staging \
@@ -182,6 +186,7 @@ you don't want this to occur, you must provide a script and specify an alternati
 For example to run the same command as above and use the default (DEFLATE) compression codec in Hadoop, you would:
 
 <pre><code>bin/slurper.sh.sh \
+  --datasource-name test \
   --src-dir file:/app/slurper/in \
   --dest-dir hdfs:/user/ali/in \
   --dest-staging-dir hdfs:/user/ali/staging \
@@ -225,6 +230,7 @@ And you would use it as follows:
 <pre><code>touch /app/apache-2011-02-02.log
 
 bin/slurper.sh.sh \
+  --datasource-name test \
   --src-dir file:/app/slurper/in \
   --script "/app/slurper.sh/sample-python.py" \
   --dest-staging-dir hdfs:/user/ali/staging \
