@@ -52,6 +52,18 @@
             <url>https://repository.cloudera.com/artifactory/libs-release</url>
         </repository>
 
+        <repository>
+          <id>hadoop-non-releases</id>
+          <name>Hadoop non-releases</name>
+          <url>http://alexholmes.github.com/hadoop-book-mvn-repo/repository/releases/</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </repository>
+
     </repositories>
 
     <dependencies>
@@ -96,6 +108,13 @@
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-core</artifactId>
             <version>0.20.2-cdh3u2</version>
+        </dependency>
+
+        <dependency>
+          <groupId>com.hadoop.compression.lzo</groupId>
+          <artifactId>hadoop-lzo</artifactId>
+          <version>0.4.14</version>
+          <scope>compile</scope>
         </dependency>
 
     </dependencies>

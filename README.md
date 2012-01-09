@@ -67,11 +67,13 @@ To see all the options available:
 
 <pre><code>usage: Slurper [-a] [-c <arg>] -d <arg> -e <arg> -g <arg> [-i <arg>] [-n]
        [-o <arg>] [-p] [-r] -s <arg> [-t <arg>] [-u] [-v] -w <arg> [-x
-       <arg>] [-z <arg>]
+       <arg>] [-y] [-z <arg>]
  -a,--daemon                   Whether to run as a daemon (always up), or
                                just process the existing files and exit.
                                This option will also 'nohup' the process
- -c,--compress <arg>           The compression codec class (Optional)
+ -c,--compress <arg>           The codec to use to compress the file as it
+                               is being written to the destination.
+                               (Optional)
  -d,--datasource-name <arg>    The data source name.  This is used to log
                                slurper activity to a unique log file.
  -e,--error-dir <arg>          Error directory.  This must be a
@@ -158,6 +160,10 @@ To see all the options available:
                                host and port settings in your
                                core-site.xml file.
  -x,--threads <arg>            The number of worker threads.  (Optional)
+ -y,--create-lzo-index         If the compression codec is
+                               com.hadoop.compression.lzo.LzopCodec,  an
+                               index file will be created post transfer.
+                               (Optional)
  -z,--work-script <arg>        A shell script which can be called to after
                                the file is moved into the work directory
                                but before it is copied to the
@@ -175,6 +181,7 @@ To see all the options available:
                                return the fully-qualified URI of the new
                                file in the work directory on standard
                                output.
+
 </code></pre>
 
 If you wanted a one-time transfer of files from a local /app/slurper/in directory into a /user/ali/in directory in

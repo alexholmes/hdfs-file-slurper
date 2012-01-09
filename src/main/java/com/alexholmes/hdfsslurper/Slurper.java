@@ -44,6 +44,7 @@ public class Slurper {
     private static Log log = LogFactory.getLog(Slurper.class);
 
     private CompressionCodec codec;
+    private boolean createLzopIndex;
     private Path srcDir;
     private Path workDir;
     private Path completeDir;
@@ -68,6 +69,7 @@ public class Slurper {
     public static final String ARGS_DEST_DIR = "dest-dir";
     public static final String ARGS_DEST_STAGING_DIR = "dest-staging-dir";
     public static final String ARGS_COMPRESS = "compress";
+    public static final String ARGS_COMPRESS_LZO_CREATE_INDEX = "create-lzo-index";
     public static final String ARGS_DAEMON = "daemon";
     public static final String ARGS_DATASOURCE_NAME = "datasource-name";
     public static final String ARGS_DAEMON_NO_BACKGROUND = "daemon-no-bkgrnd";
@@ -132,7 +134,9 @@ public class Slurper {
         //
         options.addOption("a", ARGS_DAEMON, false, "Whether to run as a daemon (always up), or just process the existing files and exit.  This option will also 'nohup' the process");
         options.addOption("u", ARGS_DAEMON_NO_BACKGROUND, false, "Whether to run as a daemon (always up), or just process the existing files and exit.  This option is suitable for inittab respawn execution, where the Java process isn't launched in the background.");
-        options.addOption("c", ARGS_COMPRESS, true, "The compression codec class (Optional)");
+        options.addOption("c", ARGS_COMPRESS, true, "The codec to use to compress the file as it is being written to the destination.  (Optional)");
+        options.addOption("y", ARGS_COMPRESS_LZO_CREATE_INDEX, false, "If the compression codec is com.hadoop.compression.lzo.LzopCodec, "+
+                " an index file will be created post transfer.  (Optional)");
         options.addOption("n", ARGS_CREATE_DONE_FILE, false, "Touch a file in the destination directory after the file " +
                 "copy process has completed.  The done filename is the same as the destination file appended " +
                 "with \".done\" (Optional)");
@@ -214,6 +218,9 @@ public class Slurper {
         if (commandLine.hasOption(ARGS_COMPRESS)) {
             codec = (CompressionCodec)
                     ReflectionUtils.newInstance(Class.forName(commandLine.getOptionValue(ARGS_COMPRESS)), config);
+            if (commandLine.hasOption(ARGS_COMPRESS)) {
+                createLzopIndex = true;
+            }
         }
         remove = commandLine.hasOption(ARGS_REMOVE_AFTER_COPY);
         doneFile = commandLine.hasOption(ARGS_CREATE_DONE_FILE);
@@ -304,7 +311,7 @@ public class Slurper {
             }
         } else if (srcHost == null && dstHost != null) {
             return false;
-        } else if (srcHost != null && dstHost == null) {
+        } else if (srcHost != null) {
             return false;
         }
         //check for ports
@@ -361,8 +368,8 @@ public class Slurper {
 
         final List<WorkerThread> workerThreads = new ArrayList<WorkerThread>();
         for (int i = 1; i <= numThreads; i++) {
-            WorkerThread t = new WorkerThread(config, verify, doneFile, script, workScript, codec, fileSystemManager,
-                    i, daemon, TimeUnit.MILLISECONDS, pollSleepPeriodMillis);
+            WorkerThread t = new WorkerThread(config, verify, doneFile, script, workScript, codec, createLzopIndex,
+                    fileSystemManager, i, daemon, TimeUnit.MILLISECONDS, pollSleepPeriodMillis);
             t.start();
             workerThreads.add(t);
         }

@@ -16,6 +16,7 @@
 
 package com.alexholmes.hdfsslurper;
 
+import com.hadoop.compression.lzo.LzoIndexer;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -45,10 +46,12 @@ public class WorkerThread extends Thread {
     private final String scriptFile;
     private final String workScriptFile;
     private final CompressionCodec codec;
+    private final boolean createLzopIndex;
     private final FileSystemManager fileSystemManager;
     private final boolean poll;
     private final TimeUnit pollSleepUnit;
     private final long pollSleepPeriod;
+    private final LzoIndexer indexer;
 
     public WorkerThread(Configuration config,
                         boolean verifyCopy,
@@ -56,6 +59,7 @@ public class WorkerThread extends Thread {
                         String scriptFile,
                         String workScriptFile,
                         CompressionCodec codec,
+                        boolean createLzopIndex,
                         FileSystemManager fileSystemManager,
                         int threadIndex,
                         boolean poll,
@@ -67,12 +71,14 @@ public class WorkerThread extends Thread {
         this.scriptFile = scriptFile;
         this.workScriptFile = workScriptFile;
         this.codec = codec;
+        this.createLzopIndex = createLzopIndex;
         this.fileSystemManager = fileSystemManager;
         this.poll = poll;
         this.pollSleepUnit = pollSleepUnit;
         this.pollSleepPeriod = pollSleepPeriod;
         this.setDaemon(true);
         this.setName(WorkerThread.class.getSimpleName() + "-" + threadIndex);
+        this.indexer = new LzoIndexer(config);
     }
 
     @Override
@@ -204,6 +210,10 @@ public class WorkerThread extends Thread {
         log.info("Moving staging file '" + stagingFile + "' to destination '" + destFile + "'");
         if (!destFs.rename(stagingFile, destFile)) {
             throw new IOException("Failed to rename file");
+        }
+
+        if(codec != null && createLzopIndex) {
+            indexer.index(destFile);
         }
 
         if (createDoneFile) {
