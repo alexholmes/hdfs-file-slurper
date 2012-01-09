@@ -43,6 +43,7 @@ public class WorkerThread extends Thread {
     private final boolean verifyCopy;
     private final boolean createDoneFile;
     private final String scriptFile;
+    private final String workScriptFile;
     private final CompressionCodec codec;
     private final FileSystemManager fileSystemManager;
     private final boolean poll;
@@ -53,6 +54,7 @@ public class WorkerThread extends Thread {
                         boolean verifyCopy,
                         boolean createDoneFile,
                         String scriptFile,
+                        String workScriptFile,
                         CompressionCodec codec,
                         FileSystemManager fileSystemManager,
                         int threadIndex,
@@ -63,6 +65,7 @@ public class WorkerThread extends Thread {
         this.verifyCopy = verifyCopy;
         this.createDoneFile = createDoneFile;
         this.scriptFile = scriptFile;
+        this.workScriptFile = workScriptFile;
         this.codec = codec;
         this.fileSystemManager = fileSystemManager;
         this.poll = poll;
@@ -117,8 +120,16 @@ public class WorkerThread extends Thread {
 
     private void process(FileStatus srcFileStatus) throws IOException, InterruptedException {
 
+        FileSystem srcFs = srcFileStatus.getPath().getFileSystem(config);
+
+        // run a script which can change the name of the file as well as write out a new version of the file
+        //
+        if (workScriptFile != null) {
+            Path newSrcFile = stageSource(srcFileStatus);
+            srcFileStatus = srcFileStatus.getPath().getFileSystem(config).getFileStatus(newSrcFile);
+        }
+
         Path srcFile = srcFileStatus.getPath();
-        FileSystem srcFs = srcFile.getFileSystem(config);
 
         // get the target HDFS file
         //
@@ -186,12 +197,12 @@ public class WorkerThread extends Thread {
             verify(stagingFile, crc.getValue());
         }
 
-        if(destFs.exists(destFile)) {
+        if (destFs.exists(destFile)) {
             destFs.delete(destFile, false);
         }
 
         log.info("Moving staging file '" + stagingFile + "' to destination '" + destFile + "'");
-        if(!destFs.rename(stagingFile, destFile)) {
+        if (!destFs.rename(stagingFile, destFile)) {
             throw new IOException("Failed to rename file");
         }
 
@@ -202,6 +213,15 @@ public class WorkerThread extends Thread {
         }
 
         fileSystemManager.fileCopyComplete(srcFileStatus);
+    }
+
+    private Path stageSource(FileStatus srcFile) throws IOException {
+        Path p = new Path(ScriptExecutor.getStdOutFromScript(workScriptFile, srcFile.getPath().toString(), 60, TimeUnit.SECONDS));
+        if (p.toUri().getScheme() == null) {
+            throw new IOException("Work path from script must be a URI with a scheme: '" + p + "'");
+        }
+        log.info("Staging script returned new file '" + p + " for old " + srcFile.getPath());
+        return p;
     }
 
     private void verify(Path hdfs, long localFileCRC) throws IOException {
@@ -247,7 +267,7 @@ public class WorkerThread extends Thread {
     }
 
     private Path getDestPathFromScript(FileStatus srcFile) throws IOException {
-        Path p = new Path(ScriptExecutor.getDestFileFromScript(scriptFile, srcFile, 60, TimeUnit.SECONDS));
+        Path p = new Path(ScriptExecutor.getStdOutFromScript(scriptFile, srcFile.getPath().toString(), 60, TimeUnit.SECONDS));
         if (p.toUri().getScheme() == null) {
             throw new IOException("Destination path from script must be a URI with a scheme: '" + p + "'");
         }

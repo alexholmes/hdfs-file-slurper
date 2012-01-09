@@ -31,7 +31,9 @@ import org.apache.log4j.PropertyConfigurator;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -49,6 +51,7 @@ public class Slurper {
     private Path destDir;
     private Path destStagingDir;
     private String script;
+    private String workScript;
     private boolean remove;
     private boolean doneFile;
     private boolean verify;
@@ -76,6 +79,7 @@ public class Slurper {
     public static final String ARGS_WORKER_THREADS = "threads";
     public static final String ARGS_POLL_PERIOD_MILLIS = "poll-period-millis";
     public static final String ARGS_SCRIPT = "script";
+    public static final String ARGS_WORK_SCRIPT = "work-script";
 
     private void printUsageAndExit(Options options, int exitCode) {
         HelpFormatter formatter = new HelpFormatter();
@@ -97,12 +101,12 @@ public class Slurper {
 
     private void setupLog4j(String datasourceName) throws IOException {
         String propFile = System.getProperty("slurper.log4j.properties");
-            Properties p = new Properties();
+        Properties p = new Properties();
         InputStream is = null;
         try {
             is = new FileInputStream(propFile);
             p.load(is);
-            p.put( "log.datasource", datasourceName ); // overwrite "log.dir"
+            p.put("log.datasource", datasourceName); // overwrite "log.dir"
             PropertyConfigurator.configure(p);
         } finally {
             IOUtils.closeQuietly(is);
@@ -136,6 +140,13 @@ public class Slurper {
                 "involves reading the entire destination file after the copy has completed. (Optional)");
         options.addOption("p", ARGS_POLL_PERIOD_MILLIS, false, "The time threads wait in milliseconds between polling the file system for new files. (Optional)");
         options.addOption("x", ARGS_WORKER_THREADS, true, "The number of worker threads.  (Optional)");
+        options.addOption("z", ARGS_WORK_SCRIPT, true, "A shell script which can be called to after the file is moved into the work directory but before it is copied to the destination." +
+                "This gives users the chance to modify the contents of the file and change the filename prior to it being uploaded by the Slurper." +
+                "An example of usage would be if files are dumped into the in folder and you need to uncompress them and also change the filename to include a timestamp." +
+                "The standard input will contain a single line with the fully qualified URI of the source file in the work directory." +
+                "The script must create a file in the word directory and return the fully-qualified URI of the new file in the work directory on standard output."
+                );
+
 
         // mutually exclusive arguments.  one of them must be defined
         //
@@ -200,7 +211,6 @@ public class Slurper {
         }
 
 
-
         if (commandLine.hasOption(ARGS_COMPRESS)) {
             codec = (CompressionCodec)
                     ReflectionUtils.newInstance(Class.forName(commandLine.getOptionValue(ARGS_COMPRESS)), config);
@@ -217,7 +227,6 @@ public class Slurper {
         }
 
         validateSrcDir();
-        validateDirectories();
 
         // make sure one of these has been set
         //
@@ -242,6 +251,11 @@ public class Slurper {
             script = commandLine.getOptionValue(ARGS_SCRIPT);
         }
 
+        if (commandLine.hasOption(ARGS_WORK_SCRIPT)) {
+            workScript = commandLine.getOptionValue(ARGS_WORK_SCRIPT);
+        }
+
+        validateDirectories();
     }
 
     private void validateSrcDir() throws IOException {
@@ -256,9 +270,7 @@ public class Slurper {
     private void validateSameFileSystem(Path p1, Path p2) throws IOException {
         FileSystem fs1 = p1.getFileSystem(config);
         FileSystem fs2 = p2.getFileSystem(config);
-        URI u1 = fs1.getUri();
-        URI u2 = fs2.getUri();
-        if (!u1.equals(u2)) {
+        if (!compareFs(fs1, fs2)) {
             log.error("The two paths must exist on the same file system: " + p1 + "," + p2);
             printUsageAndExit(options, 3);
         }
@@ -267,6 +279,36 @@ public class Slurper {
             log.error("The paths must be distinct: " + p1);
             printUsageAndExit(options, 3);
         }
+    }
+
+    private boolean compareFs(FileSystem fs1, FileSystem fs2) {
+        URI uri1 = fs1.getUri();
+        URI uri2 = fs2.getUri();
+        if (uri1.getScheme() == null) {
+            return false;
+        }
+        if (!uri1.getScheme().equals(uri2.getScheme())) {
+            return false;
+        }
+        String srcHost = uri1.getHost();
+        String dstHost = uri2.getHost();
+        if ((srcHost != null) && (dstHost != null)) {
+            try {
+                srcHost = InetAddress.getByName(srcHost).getCanonicalHostName();
+                dstHost = InetAddress.getByName(dstHost).getCanonicalHostName();
+            } catch (UnknownHostException ue) {
+                return false;
+            }
+            if (!srcHost.equals(dstHost)) {
+                return false;
+            }
+        } else if (srcHost == null && dstHost != null) {
+            return false;
+        } else if (srcHost != null && dstHost == null) {
+            return false;
+        }
+        //check for ports
+        return uri1.getPort() == uri2.getPort();
     }
 
     private void testCreateSrcDir(Path p) throws IOException {
@@ -288,7 +330,8 @@ public class Slurper {
         validateSameFileSystem(srcDir, workDir);
         validateSameFileSystem(srcDir, errorDir);
 
-        if(destDir != null) {
+        if (destDir != null) {
+            System.out.println("Comparing dest " + destDir + " and " + destStagingDir);
             validateSameFileSystem(destDir, destStagingDir);
         }
 
@@ -318,7 +361,7 @@ public class Slurper {
 
         final List<WorkerThread> workerThreads = new ArrayList<WorkerThread>();
         for (int i = 1; i <= numThreads; i++) {
-            WorkerThread t = new WorkerThread(config, verify, doneFile, script, codec, fileSystemManager,
+            WorkerThread t = new WorkerThread(config, verify, doneFile, script, workScript, codec, fileSystemManager,
                     i, daemon, TimeUnit.MILLISECONDS, pollSleepPeriodMillis);
             t.start();
             workerThreads.add(t);

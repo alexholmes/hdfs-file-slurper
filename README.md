@@ -17,6 +17,7 @@ The source or destination directories can be local, HDFS, or any other Hadoop Fi
 * Ignores hidden files (filenames that start with ".")
 * Customizable destination via a script which can be called for every source file.  Or alternatively let the utility
 know a single destination directory
+* Customizable pre-processing of file prior to transfer via script
 and all files are copied into that location.
 * A daemon mode which will `nohup` the process and keep polling for files in the source directory
 * A daemon mode which is compatible with `inittab` respawn
@@ -64,10 +65,9 @@ export HADOOP_HOME=/usr/lib/hadoop
 
 To see all the options available:
 
-<pre><code>bin/slurper.sh
-usage: Slurper [-a] [-c <arg>] -d <arg> -e <arg> -g <arg> [-i <arg>] [-n]
+<pre><code>usage: Slurper [-a] [-c <arg>] -d <arg> -e <arg> -g <arg> [-i <arg>] [-n]
        [-o <arg>] [-p] [-r] -s <arg> [-t <arg>] [-u] [-v] -w <arg> [-x
-       <arg>]
+       <arg>] [-z <arg>]
  -a,--daemon                   Whether to run as a daemon (always up), or
                                just process the existing files and exit.
                                This option will also 'nohup' the process
@@ -158,6 +158,23 @@ usage: Slurper [-a] [-c <arg>] -d <arg> -e <arg> -g <arg> [-i <arg>] [-n]
                                host and port settings in your
                                core-site.xml file.
  -x,--threads <arg>            The number of worker threads.  (Optional)
+ -z,--work-script <arg>        A shell script which can be called to after
+                               the file is moved into the work directory
+                               but before it is copied to the
+                               destination.This gives users the chance to
+                               modify the contents of the file and change
+                               the filename prior to it being uploaded by
+                               the Slurper.An example of usage would be if
+                               files are dumped into the in folder and you
+                               need to uncompress them and also change the
+                               filename to include a timestamp.The
+                               standard input will contain a single line
+                               with the fully qualified URI of the source
+                               file in the work directory.The script must
+                               create a file in the word directory and
+                               return the fully-qualified URI of the new
+                               file in the work directory on standard
+                               output.
 </code></pre>
 
 If you wanted a one-time transfer of files from a local /app/slurper/in directory into a /user/ali/in directory in
