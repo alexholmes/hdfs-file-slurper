@@ -244,7 +244,7 @@ print hdfs_dest,
 
 And you would use it as follows:
 
-<pre><code>touch /app/apache-2011-02-02.log
+<pre><code>touch /app/apache-20110202.log
 
 bin/slurper.sh.sh \
   --datasource-name test \
@@ -254,5 +254,5 @@ bin/slurper.sh.sh \
   --work-dir file:/app/slurper/work  \
   --complete-dir file:/app/slurper/complete \
   --error-dir file:/app/slurper/error
-INFO hdfsslurper.Slurper: Copying source file 'file:/app/slurper/in/apache-2011-02-02.log' to destination 'hdfs:/data/2011-02-02/apache-2011-02-02.log
+INFO hdfsslurper.Slurper: Copying source file 'file:/app/slurper/in/apache-2011-02-02.log' to destination 'hdfs:/data/2011/02/02/apache-2011-02-02.log
 </code></pre>

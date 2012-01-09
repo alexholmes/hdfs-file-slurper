@@ -113,7 +113,7 @@ public class FileSystemManager {
 
     public boolean fileCopyError(FileStatus fs) throws IOException, InterruptedException {
         Path errorPath = new Path(errorDirectory, fs.getPath().getName());
-        log.info("File copy error, moving source " + fs.getPath() + " to error file " + errorPath);
+        log.info("Found file in work directory, moving " + fs.getPath() + " to error file " + errorPath);
         return sourceFileSystem.rename(fs.getPath(), errorPath);
     }
 

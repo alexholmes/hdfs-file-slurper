@@ -9,7 +9,7 @@ input_file=sys.stdin.readline()
 filename = os.path.basename(input_file)
 
 # extract the date from the filename
-match=re.search(r'([0-9]{4})([0-9]{2})([0-9]{2})\-', filename)
+match=re.search(r'([0-9]{4})([0-9]{2})([0-9]{2})', filename)
 
 year=match.group(1)
 mon=match.group(2)
