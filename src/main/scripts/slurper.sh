@@ -132,7 +132,6 @@ if [ -d "${HADOOP_HOME}/build/native" -o -d "${HADOOP_HOME}/lib/native" -o -d "$
   fi
 fi
 
-
 date=`date +"%Y%m%d-%H%M%S"`
 outfile=$BASEDIR/logs/slurper-$date.out
 errfile=$BASEDIR/logs/slurper-$date.err
@@ -144,7 +143,10 @@ case "$mode" in
   ;;
   daemon-no-bkgrnd)
     export CLASSPATH=${BASEDIR}/conf/daemon:${CLASSPATH}
-    nohup "$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/daemon/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" > $outfile 2> $errfile < /dev/null
+    nohup "$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/daemon/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" > $outfile 2> $errfile < /dev/null &
+    PID="$!"
+    trap "kill $PID" SIGTERM
+    wait
   ;;
   daemon)
     pidfile=$BASEDIR/$SCRIPT-$datasource.pid
