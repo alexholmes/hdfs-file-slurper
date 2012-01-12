@@ -141,6 +141,13 @@ public class WorkerThread extends Thread {
         //
         Path destFile = getHdfsTargetPath(srcFileStatus);
 
+        if (codec != null) {
+            String ext = codec.getDefaultExtension();
+            if (!destFile.getName().endsWith(ext)) {
+                destFile = new Path(destFile.toString() + ext);
+            }
+        }
+
         FileSystem destFs = destFile.getFileSystem(config);
 
         // get the staging HDFS file
