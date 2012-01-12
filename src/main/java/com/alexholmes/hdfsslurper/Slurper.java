@@ -189,6 +189,7 @@ public class Slurper {
             commandLine = new PosixParser().parse(options, args);
         } catch (ParseException e) {
             log.error("Could not parse command line args: " + e.getMessage());
+            System.err.println("Could not parse command line args: " + e.getMessage());
             printUsageAndExit(options, 1);
             return;
         }
