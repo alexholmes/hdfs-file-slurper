@@ -187,7 +187,7 @@ To see all the options available:
 If you wanted a one-time transfer of files from a local /app/slurper/in directory into a /user/ali/in directory in
 HDFS your usage would look like this:
 
-<pre><code>bin/slurper.sh.sh \
+<pre><code>bin/slurper.sh \
   --datasource-name test \
   --src-dir file:/app/slurper/in \
   --dest-dir hdfs:/user/ali/in \
@@ -209,7 +209,7 @@ class.  The default behavior is to append the codec-specific extension to the en
 you don't want this to occur, you must provide a script and specify an alternative HDFS filename.
 For example to run the same command as above and use the default (DEFLATE) compression codec in Hadoop, you would:
 
-<pre><code>bin/slurper.sh.sh \
+<pre><code>bin/slurper.sh \
   --datasource-name test \
   --src-dir file:/app/slurper/in \
   --dest-dir hdfs:/user/ali/in \
@@ -253,7 +253,7 @@ And you would use it as follows:
 
 <pre><code>touch /app/apache-20110202.log
 
-bin/slurper.sh.sh \
+bin/slurper.sh \
   --datasource-name test \
   --src-dir file:/app/slurper/in \
   --script "/app/slurper.sh/sample-python.py" \
