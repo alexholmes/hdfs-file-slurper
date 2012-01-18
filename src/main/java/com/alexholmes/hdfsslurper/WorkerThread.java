@@ -78,7 +78,11 @@ public class WorkerThread extends Thread {
         this.pollSleepPeriod = pollSleepPeriod;
         this.setDaemon(true);
         this.setName(WorkerThread.class.getSimpleName() + "-" + threadIndex);
-        this.indexer = new LzoIndexer(config);
+        if(createLzopIndex) {
+            this.indexer = new LzoIndexer(config);
+        } else {
+            this.indexer = null;
+        }
     }
 
     @Override
