@@ -28,7 +28,7 @@ bin/slurper.sh \
 4.  Verify that the file was copied into HDFS
 <pre><code>$ fs -ls /tmp/slurper-test/dest/random-file
 Found 1 items
--rw-r--r--   1 aholmes supergroup    1048576 2012-01-17 21:09 /tmp/slurper-test/dest/random-file
+-rw-r--r--   1 user group    1048576 2012-01-17 21:09 /tmp/slurper-test/dest/random-file
 </code></pre>
 5.  Get the MD5 hash of the file in HDFS and verify it's the same as the original MD5 in step 2
 <pre><code>$ fs -cat /tmp/slurper-test/dest/random-file | md5sum
