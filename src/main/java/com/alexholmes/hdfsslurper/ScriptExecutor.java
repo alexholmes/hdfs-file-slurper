@@ -17,7 +17,14 @@ public class ScriptExecutor {
             throws IOException {
 
         //CommandLine commandLine = new CommandLine("/bin/bash -c " + script);
-        CommandLine commandLine = new CommandLine(script);
+
+        String[] execAndArgs = StringUtils.split(script, " ", 2);
+
+        CommandLine commandLine = new CommandLine(execAndArgs[0]);
+
+        if(execAndArgs.length > 1) {
+            commandLine.addArguments(StringUtils.split(execAndArgs[1], " "));
+        }
 
         // create the executor and consider the exitValue '1' as success
         Executor executor = new DefaultExecutor();
