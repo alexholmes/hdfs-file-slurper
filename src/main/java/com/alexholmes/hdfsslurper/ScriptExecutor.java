@@ -8,6 +8,8 @@ import org.apache.commons.logging.LogFactory;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 public class ScriptExecutor {
@@ -16,14 +18,12 @@ public class ScriptExecutor {
     public static String getStdOutFromScript(String script, String stdInLine, int timeout, TimeUnit timeoutUnit)
             throws IOException {
 
-        //CommandLine commandLine = new CommandLine("/bin/bash -c " + script);
-
-        String[] execAndArgs = StringUtils.split(script, " ", 2);
+        String[] execAndArgs = splitArgs(script);
 
         CommandLine commandLine = new CommandLine(execAndArgs[0]);
 
         if(execAndArgs.length > 1) {
-            commandLine.addArguments(StringUtils.split(execAndArgs[1], " "));
+            commandLine.addArguments(Arrays.copyOfRange(execAndArgs, 1, execAndArgs.length));
         }
 
         // create the executor and consider the exitValue '1' as success
@@ -66,5 +66,55 @@ public class ScriptExecutor {
         }
 
         return hdfsTargetFile;
+    }
+
+    final static int OUTSIDE = 1;
+    final static int SINGLEQ = 2;
+    final static int DOUBLEQ = 3;
+
+    static String[] splitArgs(String args) {
+        ArrayList argList = new ArrayList();
+        char[] ch = args.toCharArray();
+        int clen = ch.length;
+        int state = OUTSIDE;
+        int argstart = 0;
+        for (int c = 0; c <= clen; c++) {
+            boolean last = (c == clen);
+            int lastState = state;
+            boolean endToken = false;
+            if (!last) {
+                if (ch[c] == '\'') {
+                    if (state == OUTSIDE) {
+                        state = SINGLEQ;
+                    } else if (state == SINGLEQ) {
+                        state = OUTSIDE;
+                    }
+                    endToken = (state != lastState);
+                } else if (ch[c] == '"') {
+                    if (state == OUTSIDE) {
+                        state = DOUBLEQ;
+                    } else if (state == DOUBLEQ) {
+                        state = OUTSIDE;
+                    }
+                    endToken = (state != lastState);
+                } else if (ch[c] == ' ') {
+                    if (state == OUTSIDE) {
+                        endToken = true;
+                    }
+                }
+            }
+            if (last || endToken) {
+                if (c == argstart) {
+                    // unquoted space
+                } else {
+                    String a;
+                    a = args.substring(argstart, c);
+                    argList.add(a);
+                }
+                argstart = c + 1;
+                lastState = state;
+            }
+        }
+        return (String[]) argList.toArray(new String[0]);
     }
 }
