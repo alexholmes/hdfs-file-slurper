@@ -5,7 +5,7 @@
     <groupId>com.alexholmes</groupId>
     <artifactId>hdfs-slurper</artifactId>
     <name>HDFS File Slurper</name>
-    <version>0.1.1</version>
+    <version>0.1.2</version>
     <packaging>jar</packaging>
 
     <properties>
