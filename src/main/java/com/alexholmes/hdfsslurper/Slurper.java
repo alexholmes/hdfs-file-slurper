@@ -36,6 +36,7 @@ import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,6 +65,7 @@ public class Slurper {
     Options options = new Options();
     Configuration config = new Configuration();
 
+    public static final String ARGS_CONFIG_FILE = "config-file";
     public static final String ARGS_SOURCE_DIR = "src-dir";
     public static final String ARGS_WORK_DIR = "work-dir";
     public static final String ARGS_DEST_DIR = "dest-dir";
@@ -124,18 +126,21 @@ public class Slurper {
 
         // required arguments
         //
-        options.addOption(createRequiredOption("d", ARGS_DATASOURCE_NAME, true, "The data source name.  This is used to log slurper activity to a unique log file.  "));
-        options.addOption(createRequiredOption("s", ARGS_SOURCE_DIR, true, "Source directory.  " + fullyQualifiedURIStory));
-        options.addOption(createRequiredOption("w", ARGS_WORK_DIR, true, "Work directory.  " + fullyQualifiedURIStory));
-        options.addOption(createRequiredOption("e", ARGS_ERROR_DIR, true, "Error directory.  " + fullyQualifiedURIStory));
-        options.addOption(createRequiredOption("g", ARGS_DEST_STAGING_DIR, true, "Staging directory.  Files are first copied into this directory, and after the copy has been completed and verified, they are moved into the destination directory.  " + fullyQualifiedURIStory));
+        options.addOption("d", ARGS_DATASOURCE_NAME, true, "The data source name.  This is used to log slurper activity to a unique log file.  ");
+        options.addOption("s", ARGS_SOURCE_DIR, true, "Source directory.  " + fullyQualifiedURIStory);
+        options.addOption("w", ARGS_WORK_DIR, true, "Work directory.  " + fullyQualifiedURIStory);
+        options.addOption("e", ARGS_ERROR_DIR, true, "Error directory.  " + fullyQualifiedURIStory);
+        options.addOption("g", ARGS_DEST_STAGING_DIR, true, "Staging directory.  Files are first copied into this directory, and after the copy has been completed and verified, they are moved into the destination directory.  " + fullyQualifiedURIStory);
 
         // optional arguments
         //
+        options.addOption("o", ARGS_CONFIG_FILE, true, "The configuration file.  Command-line arguments override settings in this file." +
+                "  Please note that even with a config file the " + ARGS_DAEMON + ", " + ARGS_DAEMON_NO_BACKGROUND + " and " +
+                ARGS_DATASOURCE_NAME + " options must be specified on the command line.");
         options.addOption("a", ARGS_DAEMON, false, "Whether to run as a daemon (always up), or just process the existing files and exit.  This option will also 'nohup' the process");
         options.addOption("u", ARGS_DAEMON_NO_BACKGROUND, false, "Whether to run as a daemon (always up), or just process the existing files and exit.  This option is suitable for inittab respawn execution, where the Java process isn't launched in the background.");
         options.addOption("c", ARGS_COMPRESS, true, "The codec to use to compress the file as it is being written to the destination.  (Optional)");
-        options.addOption("y", ARGS_COMPRESS_LZO_CREATE_INDEX, false, "If the compression codec is com.hadoop.compression.lzo.LzopCodec, "+
+        options.addOption("y", ARGS_COMPRESS_LZO_CREATE_INDEX, false, "If the compression codec is com.hadoop.compression.lzo.LzopCodec, " +
                 " an index file will be created post transfer.  (Optional)");
         options.addOption("n", ARGS_CREATE_DONE_FILE, false, "Touch a file in the destination directory after the file " +
                 "copy process has completed.  The done filename is the same as the destination file appended " +
@@ -149,7 +154,7 @@ public class Slurper {
                 "An example of usage would be if files are dumped into the in folder and you need to uncompress them and also change the filename to include a timestamp." +
                 "The standard input will contain a single line with the fully qualified URI of the source file in the work directory." +
                 "The script must create a file in the word directory and return the fully-qualified URI of the new file in the work directory on standard output."
-                );
+        );
 
 
         // mutually exclusive arguments.  one of them must be defined
@@ -174,14 +179,6 @@ public class Slurper {
         }
     }
 
-    private String getRequiredOption(CommandLine commandLine, String option) {
-        if (!commandLine.hasOption(option)) {
-            log.error(option + " is a required option");
-            printUsageAndExit(options, 2);
-        }
-        return commandLine.getOptionValue(option);
-    }
-
     private void loadAndValidateOptions(String... args) throws ClassNotFoundException, IllegalAccessException, InstantiationException, IOException {
         // parse command line parameters
         CommandLine commandLine;
@@ -194,74 +191,88 @@ public class Slurper {
             return;
         }
 
-        srcDir = new Path(getRequiredOption(commandLine, ARGS_SOURCE_DIR));
-        workDir = new Path(getRequiredOption(commandLine, ARGS_WORK_DIR));
-        errorDir = new Path(getRequiredOption(commandLine, ARGS_ERROR_DIR));
-        destStagingDir = new Path(getRequiredOption(commandLine, ARGS_DEST_STAGING_DIR));
-        setupLog4j(getRequiredOption(commandLine, ARGS_DATASOURCE_NAME));
-
-        String dir = commandLine.getOptionValue(ARGS_COMPLETE_DIR);
-        if (dir != null) {
-            completeDir = new Path(dir);
-        }
-
-        daemon = commandLine.hasOption(ARGS_DAEMON) || commandLine.hasOption(ARGS_DAEMON_NO_BACKGROUND);
-
-        if (commandLine.hasOption(ARGS_POLL_PERIOD_MILLIS)) {
-            pollSleepPeriodMillis = Integer.valueOf(commandLine.getOptionValue(ARGS_POLL_PERIOD_MILLIS));
-        }
-
-        if (commandLine.hasOption(ARGS_WORKER_THREADS)) {
-            numThreads = Integer.valueOf(commandLine.getOptionValue(ARGS_WORKER_THREADS));
+        Map<String, String> configFileProps = null;
+        String path = commandLine.getOptionValue(ARGS_CONFIG_FILE);
+        if (path != null) {
+            configFileProps = ConfigHelper.loadProperties(path);
         }
 
 
-        if (commandLine.hasOption(ARGS_COMPRESS)) {
-            codec = (CompressionCodec)
-                    ReflectionUtils.newInstance(Class.forName(commandLine.getOptionValue(ARGS_COMPRESS)), config);
-            if (commandLine.hasOption(ARGS_COMPRESS)) {
-                createLzopIndex = true;
+        try {
+            setupLog4j(ConfigHelper.getRequiredConfigValue(configFileProps, commandLine, ARGS_DATASOURCE_NAME));
+
+            srcDir = new Path(ConfigHelper.getRequiredConfigValue(configFileProps, commandLine, ARGS_SOURCE_DIR));
+            workDir = new Path(ConfigHelper.getRequiredConfigValue(configFileProps, commandLine, ARGS_WORK_DIR));
+            errorDir = new Path(ConfigHelper.getRequiredConfigValue(configFileProps, commandLine, ARGS_ERROR_DIR));
+            destStagingDir = new Path(ConfigHelper.getRequiredConfigValue(configFileProps, commandLine, ARGS_DEST_STAGING_DIR));
+
+            String dir = ConfigHelper.getConfigValue(configFileProps, commandLine, ARGS_COMPLETE_DIR);
+            if (dir != null) {
+                completeDir = new Path(dir);
             }
-        }
-        remove = commandLine.hasOption(ARGS_REMOVE_AFTER_COPY);
-        doneFile = commandLine.hasOption(ARGS_CREATE_DONE_FILE);
-        verify = commandLine.hasOption(ARGS_VERIFY);
 
-        // make sure one of these has been set
-        //
-        if (!commandLine.hasOption(ARGS_REMOVE_AFTER_COPY) && !commandLine.hasOption(ARGS_COMPLETE_DIR)) {
-            log.error("One of \"--remove\" or \"--complete-dir\" must be set");
+            daemon =
+                    ConfigHelper.isOptionEnabled(configFileProps, commandLine, ARGS_DAEMON) ||
+                            ConfigHelper.isOptionEnabled(configFileProps, commandLine, ARGS_DAEMON_NO_BACKGROUND);
+
+            String tmp = ConfigHelper.getConfigValue(configFileProps, commandLine, ARGS_POLL_PERIOD_MILLIS);
+            if (tmp != null) {
+                pollSleepPeriodMillis = Integer.valueOf(tmp);
+            }
+
+            tmp = ConfigHelper.getConfigValue(configFileProps, commandLine, ARGS_WORKER_THREADS);
+            if (tmp != null) {
+                numThreads = Integer.valueOf(tmp);
+            }
+
+            tmp = ConfigHelper.getConfigValue(configFileProps, commandLine, ARGS_COMPRESS);
+            if (tmp != null) {
+                codec = (CompressionCodec)
+                        ReflectionUtils.newInstance(Class.forName(tmp), config);
+            }
+            createLzopIndex = ConfigHelper.isOptionEnabled(configFileProps, commandLine, ARGS_COMPRESS_LZO_CREATE_INDEX);
+            remove = ConfigHelper.isOptionEnabled(configFileProps, commandLine, ARGS_REMOVE_AFTER_COPY);
+            doneFile = ConfigHelper.isOptionEnabled(configFileProps, commandLine, ARGS_CREATE_DONE_FILE);
+            verify = ConfigHelper.isOptionEnabled(configFileProps, commandLine, ARGS_VERIFY);
+
+            // make sure one of these has been set
+            //
+            if (!remove && completeDir == null) {
+                log.error("One of \"--remove\" or \"--complete-dir\" must be set");
+                printUsageAndExit(options, 2);
+            }
+
+            validateSrcDir();
+
+            tmp = ConfigHelper.getConfigValue(configFileProps, commandLine, ARGS_DEST_DIR);
+            if (tmp != null) {
+                destDir = new Path(tmp);
+                checkScheme(destDir, "destination directory");
+                destFs = FileSystem.get(destDir.toUri(), new Configuration());
+            }
+            script = ConfigHelper.getConfigValue(configFileProps, commandLine, ARGS_SCRIPT);
+
+            // make sure one of these has been set
+            //
+            if (destDir == null && script == null) {
+                log.error("One of \"--dest-dir\" or \"--script\" must be set");
+                printUsageAndExit(options, 4);
+            }
+
+            // make sure ONLY one of these has been set
+            //
+            if (destDir != null && script != null) {
+                log.error("Only one of \"--dest-dir\" or \"--script\" can be set");
+                printUsageAndExit(options, 5);
+            }
+
+            workScript = ConfigHelper.getConfigValue(configFileProps, commandLine, ARGS_WORK_SCRIPT);
+
+        } catch (ConfigHelper.MissingRequiredConfigException e) {
+            log.error(e.getKey() + " is a required option");
             printUsageAndExit(options, 2);
         }
 
-        validateSrcDir();
-
-        // make sure one of these has been set
-        //
-        if (!commandLine.hasOption(ARGS_DEST_DIR) && !commandLine.hasOption(ARGS_SCRIPT)) {
-            log.error("One of \"--dest-dir\" or \"--script\" must be set");
-            printUsageAndExit(options, 4);
-        }
-
-        // make sure ONLY one of these has been set
-        //
-        if (commandLine.hasOption(ARGS_DEST_DIR) && commandLine.hasOption(ARGS_SCRIPT)) {
-            log.error("Only one of \"--dest-dir\" or \"--script\" can be set");
-            printUsageAndExit(options, 5);
-        }
-
-
-        if (commandLine.hasOption(ARGS_DEST_DIR)) {
-            destDir = new Path(commandLine.getOptionValue(ARGS_DEST_DIR));
-            checkScheme(destDir, "destination directory");
-            destFs = FileSystem.get(destDir.toUri(), new Configuration());
-        } else {
-            script = commandLine.getOptionValue(ARGS_SCRIPT);
-        }
-
-        if (commandLine.hasOption(ARGS_WORK_SCRIPT)) {
-            workScript = commandLine.getOptionValue(ARGS_WORK_SCRIPT);
-        }
 
         validateDirectories();
     }

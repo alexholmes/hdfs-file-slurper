@@ -47,7 +47,7 @@
         <fileSet>
             <directory>src/main/scripts</directory>
             <outputDirectory>logs</outputDirectory>
-            <directoryMode>0755</directoryMode>
+            <directoryMode>0777</directoryMode>
             <excludes>
                 <exclude>*</exclude>
             </excludes>

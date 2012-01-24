@@ -16,7 +16,9 @@
 
 package com.alexholmes.hdfsslurper;
 
+import com.hadoop.compression.lzo.LzoCodec;
 import com.hadoop.compression.lzo.LzoIndexer;
+import com.hadoop.compression.lzo.LzopCodec;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -52,6 +54,7 @@ public class WorkerThread extends Thread {
     private final TimeUnit pollSleepUnit;
     private final long pollSleepPeriod;
     private final LzoIndexer indexer;
+    private String lzopExt;
 
     public WorkerThread(Configuration config,
                         boolean verifyCopy,
@@ -80,6 +83,7 @@ public class WorkerThread extends Thread {
         this.setName(WorkerThread.class.getSimpleName() + "-" + threadIndex);
         if(createLzopIndex) {
             this.indexer = new LzoIndexer(config);
+            this.lzopExt = new LzopCodec().getDefaultExtension();
         } else {
             this.indexer = null;
         }
@@ -223,7 +227,7 @@ public class WorkerThread extends Thread {
             throw new IOException("Failed to rename file");
         }
 
-        if(codec != null && createLzopIndex) {
+        if(createLzopIndex && destFile.getName().endsWith(lzopExt)) {
             indexer.index(destFile);
         }
 

@@ -42,6 +42,11 @@ for i in $*; do
   fi
 done
 
+if [ "$mode" == "daemon" ] && [ "$datasource" == "" ]; then
+  echo "--datasource-name option is required in daemon mode"
+  exit 2;
+fi
+
 # resolve links - $0 may be a softlink
 PRG="${0}"
 
