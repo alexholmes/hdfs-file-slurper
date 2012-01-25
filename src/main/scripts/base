@@ -1,0 +1,111 @@
+#! /usr/bin/env bash
+##########################################################################
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+##########################################################################
+#
+# slurper.sh:  Copy files between local disk and HDFS.
+#
+# This script is customized to work nice with inittab respawn.
+#
+##########################################################################
+
+# assume that we're already in the slurper home directory
+BASEDIR=`pwd`
+
+. $BASEDIR/conf/slurper-env.sh
+
+if [ "$JAVA_HOME" == "" ]; then
+  echo "JAVA_HOME must be set"
+  exit 1
+fi
+
+if [ ! -f $JAVA_HOME/bin/java ]; then
+  echo "JAVA_HOME must be set to a valid Java installation directory"
+  exit 2
+fi
+
+CDH_HADOOP_HOME=/usr/lib/hadoop
+
+if [ ! -d "${HADOOP_HOME}" ]; then
+  if [ -d "${CDH_HADOOP_HOME}" ]; then
+    export HADOOP_HOME=${CDH_HADOOP_HOME}
+    echo "HADOOP_HOME environment not set, but found ${HADOOP_HOME} in path so using that"
+  else
+    echo "HADOOP_HOME must be set and point to the hadoop home directory"
+    exit 1;
+  fi
+fi
+
+export HADOOP_CONF_DIR=${HADOOP_HOME}/conf
+
+export SLURPER_JAR_DIR=$BASEDIR/lib
+
+function add_to_classpath() {
+  dir=$1
+  for f in $dir/*.jar; do
+    SLURPER_CLASSPATH=${SLURPER_CLASSPATH}:$f;
+  done
+
+  export SLURPER_CLASSPATH
+}
+
+add_to_classpath ${SLURPER_JAR_DIR}
+
+function add_to_hadoop_classpath() {
+  dir=$1
+  for f in $dir/*.jar; do
+    HADOOP_CLASSPATH=${HADOOP_CLASSPATH}:$f;
+  done
+
+  export HADOOP_CLASSPATH
+}
+
+export HADOOP_LIB_DIR=$HADOOP_HOME
+add_to_hadoop_classpath ${HADOOP_LIB_DIR}
+export HADOOP_LIB_DIR=$HADOOP_HOME/lib
+add_to_hadoop_classpath ${HADOOP_LIB_DIR}
+
+export SLURPER_JAR="${BASEDIR}/dist/lib/*"
+export SLURPER_CONFIG_DIR="${BASEDIR}/config"
+
+export CLASSPATH=${SLURPER_CONFIG_DIR}:${SLURPER_JAR}:${HADOOP_CONF_DIR}:${HADOOP_CLASSPATH}:${SLURPER_CLASSPATH}
+
+export JAVA=$JAVA_HOME/bin/java
+export JAVA_HEAP_MAX=-Xmx512m
+
+# pick up the native Hadoop directory if it exists
+# this is to support native compression codecs
+ #
+if [ -d "${HADOOP_HOME}/build/native" -o -d "${HADOOP_HOME}/lib/native" -o -d "${HADOOP_HOME}/sbin" ]; then
+  JAVA_PLATFORM=`CLASSPATH=${CLASSPATH} ${JAVA} -Xmx32m ${HADOOP_JAVA_PLATFORM_OPTS} org.apache.hadoop.util.PlatformName | sed -e "s/ /_/g"`
+
+  if [ -d "$HADOOP_HOME/build/native" ]; then
+    if [ "x$JAVA_LIBRARY_PATH" != "x" ]; then
+        JAVA_LIBRARY_PATH=${JAVA_LIBRARY_PATH}:${HADOOP_HOME}/build/native/${JAVA_PLATFORM}/lib
+    else
+        JAVA_LIBRARY_PATH=${HADOOP_HOME}/build/native/${JAVA_PLATFORM}/lib
+    fi
+  fi
+
+  if [ -d "${HADOOP_HOME}/lib/native" ]; then
+    if [ "x$JAVA_LIBRARY_PATH" != "x" ]; then
+      JAVA_LIBRARY_PATH=${JAVA_LIBRARY_PATH}:${HADOOP_HOME}/lib/native/${JAVA_PLATFORM}
+    else
+      JAVA_LIBRARY_PATH=${HADOOP_HOME}/lib/native/${JAVA_PLATFORM}
+    fi
+  fi
+fi
+
+export JAVA_LIBRARY_PATH

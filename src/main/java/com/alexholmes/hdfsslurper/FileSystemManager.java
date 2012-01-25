@@ -18,14 +18,10 @@ package com.alexholmes.hdfsslurper;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -33,28 +29,12 @@ import java.util.concurrent.locks.ReentrantLock;
 public class FileSystemManager {
     private static Log log = LogFactory.getLog(FileSystemManager.class);
 
-    private final Configuration config;
-    private final Path inboundDirectory;
-    private final Path workDirectory;
-    private final Path completedDirectory;
-    private final Path errorDirectory;
-    private final Path destinationDirectory;
-    private final Path destStagingDir;
-    private final boolean removeFileAfterCopy;
-    private final FileSystem sourceFileSystem;
+    private final Config config;
 
     private final ReentrantLock inboundDirLock = new ReentrantLock();
 
-    public FileSystemManager(Configuration conf, Path inboundDirectory, Path workDirectory, Path completedDirectory, Path errorDirectory, Path destinationDirectory, Path destStagingDir, boolean removeFileAfterCopy) throws IOException {
-        this.config = conf;
-        this.inboundDirectory = inboundDirectory;
-        this.workDirectory = workDirectory;
-        this.completedDirectory = completedDirectory;
-        this.errorDirectory = errorDirectory;
-        this.destinationDirectory = destinationDirectory;
-        this.destStagingDir = destStagingDir;
-        this.removeFileAfterCopy = removeFileAfterCopy;
-        sourceFileSystem = inboundDirectory.getFileSystem(config);
+    public FileSystemManager(Config config) throws IOException {
+      this.config = config;
     }
 
     public FileStatus pollForInboundFile(TimeUnit unit, long period) throws IOException, InterruptedException {
@@ -71,7 +51,7 @@ public class FileSystemManager {
     public FileStatus getInboundFile() throws IOException, InterruptedException {
         try {
             inboundDirLock.lockInterruptibly();
-            for (FileStatus fs : sourceFileSystem.listStatus(inboundDirectory)) {
+            for (FileStatus fs : config.getSrcFs().listStatus(config.getSrcDir())) {
                 if (!fs.isDir()) {
                     if (fs.getPath().getName().startsWith(".")) {
                         log.debug("Ignoring hidden file '" + fs.getPath() + "'");
@@ -80,10 +60,10 @@ public class FileSystemManager {
 
                     // move file into work directory
                     //
-                    Path workPath = new Path(workDirectory, fs.getPath().getName());
-                    sourceFileSystem.rename(fs.getPath(), workPath);
+                    Path workPath = new Path(config.getWorkDir(), fs.getPath().getName());
+                  config.getSrcFs().rename(fs.getPath(), workPath);
 
-                    return sourceFileSystem.getFileStatus(workPath);
+                    return config.getSrcFs().getFileStatus(workPath);
                 }
             }
             return null;
@@ -94,16 +74,16 @@ public class FileSystemManager {
 
     public boolean fileCopyComplete(FileStatus fs) throws IOException {
         boolean success;
-        if (removeFileAfterCopy) {
+        if (config.isRemove()) {
             log.info("File copy successful, deleting source " + fs.getPath());
-            success = sourceFileSystem.delete(fs.getPath(), false);
+            success = config.getSrcFs().delete(fs.getPath(), false);
             if(!success) {
                 log.info("File deletion unsuccessful");
             }
         } else {
-            Path completedPath = new Path(completedDirectory, fs.getPath().getName());
+            Path completedPath = new Path(config.getCompleteDir(), fs.getPath().getName());
             log.info("File copy successful, moving source " + fs.getPath() + " to completed file " + completedPath);
-            success = sourceFileSystem.rename(fs.getPath(), completedPath);
+            success = config.getSrcFs().rename(fs.getPath(), completedPath);
             if(!success) {
                 log.info("File move unsuccessful");
             }
@@ -112,37 +92,13 @@ public class FileSystemManager {
     }
 
     public boolean fileCopyError(FileStatus fs) throws IOException, InterruptedException {
-        Path errorPath = new Path(errorDirectory, fs.getPath().getName());
+        Path errorPath = new Path(config.getErrorDir(), fs.getPath().getName());
         log.info("Found file in work directory, moving " + fs.getPath() + " to error file " + errorPath);
-        return sourceFileSystem.rename(fs.getPath(), errorPath);
-    }
-
-    public Path getInboundDirectory() {
-        return inboundDirectory;
-    }
-
-    public Path getWorkDirectory() {
-        return workDirectory;
-    }
-
-    public Path getCompletedDirectory() {
-        return completedDirectory;
-    }
-
-    public boolean isRemoveFileAfterCopy() {
-        return removeFileAfterCopy;
-    }
-
-    public Path getErrorDirectory() {
-        return errorDirectory;
-    }
-
-    public Path getDestinationDirectory() {
-        return destinationDirectory;
+        return config.getSrcFs().rename(fs.getPath(), errorPath);
     }
 
     public void moveWorkFilesToError() throws IOException, InterruptedException {
-        for (FileStatus fs : sourceFileSystem.listStatus(workDirectory)) {
+        for (FileStatus fs : config.getSrcFs().listStatus(config.getWorkDir())) {
             if (!fs.isDir()) {
                 if (fs.getPath().getName().startsWith(".")) {
                     log.debug("Ignoring hidden file '" + fs.getPath() + "'");
@@ -156,6 +112,6 @@ public class FileSystemManager {
 
     public Path getStagingFile(FileStatus srcFileStatus, Path destFile) {
         int hash = Math.abs((srcFileStatus.getPath().toString() + destFile.toString()).hashCode() + new Random().nextInt());
-        return new Path(destStagingDir, String.valueOf(hash));
+        return new Path(config.getDestStagingDir(), String.valueOf(hash));
     }
 }

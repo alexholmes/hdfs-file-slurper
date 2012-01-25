@@ -16,18 +16,15 @@
 
 package com.alexholmes.hdfsslurper;
 
-import com.hadoop.compression.lzo.LzoCodec;
 import com.hadoop.compression.lzo.LzoIndexer;
 import com.hadoop.compression.lzo.LzopCodec;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
-import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.log4j.MDC;
 
 import java.io.BufferedInputStream;
@@ -42,47 +39,23 @@ import java.util.zip.CheckedInputStream;
 public class WorkerThread extends Thread {
     private static Log log = LogFactory.getLog(WorkerThread.class);
     private AtomicBoolean shuttingDown = new AtomicBoolean(false);
-    private final Configuration config;
-    private final boolean verifyCopy;
-    private final boolean createDoneFile;
-    private final String scriptFile;
-    private final String workScriptFile;
-    private final CompressionCodec codec;
-    private final boolean createLzopIndex;
+    private final Config config;
     private final FileSystemManager fileSystemManager;
-    private final boolean poll;
     private final TimeUnit pollSleepUnit;
-    private final long pollSleepPeriod;
     private final LzoIndexer indexer;
     private String lzopExt;
 
-    public WorkerThread(Configuration config,
-                        boolean verifyCopy,
-                        boolean createDoneFile,
-                        String scriptFile,
-                        String workScriptFile,
-                        CompressionCodec codec,
-                        boolean createLzopIndex,
+    public WorkerThread(Config config,
                         FileSystemManager fileSystemManager,
-                        int threadIndex,
-                        boolean poll,
                         TimeUnit pollSleepUnit,
-                        long pollSleepPeriod) {
+                        int threadIndex) {
         this.config = config;
-        this.verifyCopy = verifyCopy;
-        this.createDoneFile = createDoneFile;
-        this.scriptFile = scriptFile;
-        this.workScriptFile = workScriptFile;
-        this.codec = codec;
-        this.createLzopIndex = createLzopIndex;
         this.fileSystemManager = fileSystemManager;
-        this.poll = poll;
         this.pollSleepUnit = pollSleepUnit;
-        this.pollSleepPeriod = pollSleepPeriod;
         this.setDaemon(true);
         this.setName(WorkerThread.class.getSimpleName() + "-" + threadIndex);
-        if(createLzopIndex) {
-            this.indexer = new LzoIndexer(config);
+        if(config.isCreateLzopIndex()) {
+            this.indexer = new LzoIndexer(config.getConfig());
             this.lzopExt = new LzopCodec().getDefaultExtension();
         } else {
             this.indexer = null;
@@ -102,18 +75,9 @@ public class WorkerThread extends Thread {
         log.info("Thread exiting");
     }
 
-    private void doWork() throws InterruptedException {
+    protected void doWork() throws InterruptedException {
         try {
-            if (poll) {
-                copyFile(fileSystemManager.pollForInboundFile(pollSleepUnit, pollSleepPeriod));
-            } else {
-                FileStatus fs = fileSystemManager.getInboundFile();
-                if (fs == null) {
-                    shuttingDown.set(true);
-                } else {
-                    copyFile(fs);
-                }
-            }
+            copyFile(fileSystemManager.pollForInboundFile(pollSleepUnit, config.getPollSleepPeriodMillis()));
         } catch (InterruptedException ie) {
             throw ie;
         } catch (Throwable t) {
@@ -134,13 +98,13 @@ public class WorkerThread extends Thread {
 
     private void process(FileStatus srcFileStatus) throws IOException, InterruptedException {
 
-        FileSystem srcFs = srcFileStatus.getPath().getFileSystem(config);
+        FileSystem srcFs = srcFileStatus.getPath().getFileSystem(config.getConfig());
 
         // run a script which can change the name of the file as well as write out a new version of the file
         //
-        if (workScriptFile != null) {
+        if (config.getWorkScript() != null) {
             Path newSrcFile = stageSource(srcFileStatus);
-            srcFileStatus = srcFileStatus.getPath().getFileSystem(config).getFileStatus(newSrcFile);
+            srcFileStatus = srcFileStatus.getPath().getFileSystem(config.getConfig()).getFileStatus(newSrcFile);
         }
 
         Path srcFile = srcFileStatus.getPath();
@@ -149,14 +113,14 @@ public class WorkerThread extends Thread {
         //
         Path destFile = getHdfsTargetPath(srcFileStatus);
 
-        if (codec != null) {
-            String ext = codec.getDefaultExtension();
+        if (config.getCodec() != null) {
+            String ext = config.getCodec().getDefaultExtension();
             if (!destFile.getName().endsWith(ext)) {
                 destFile = new Path(destFile.toString() + ext);
             }
         }
 
-        FileSystem destFs = destFile.getFileSystem(config);
+        FileSystem destFs = destFile.getFileSystem(config.getConfig());
 
         // get the staging HDFS file
         //
@@ -191,13 +155,13 @@ public class WorkerThread extends Thread {
         CRC32 crc = new CRC32();
         try {
             is = new BufferedInputStream(srcFs.open(srcFile));
-            if (verifyCopy) {
+            if (config.isVerify()) {
                 is = new CheckedInputStream(is, crc);
             }
             os = destFs.create(stagingFile);
 
-            if (codec != null) {
-                os = codec.createOutputStream(os);
+            if (config.getCodec() != null) {
+                os = config.getCodec().createOutputStream(os);
             }
 
             IOUtils.copyBytes(is, os, 4096, true);
@@ -208,13 +172,13 @@ public class WorkerThread extends Thread {
 
         long srcFileSize = srcFs.getFileStatus(srcFile).getLen();
         long destFileSize = destFs.getFileStatus(stagingFile).getLen();
-        if (codec == null && srcFileSize != destFileSize) {
+        if (config.getCodec() == null && srcFileSize != destFileSize) {
             throw new IOException("File sizes don't match, source = " + srcFileSize + ", dest = " + destFileSize);
         }
 
         log.info("Local file size = " + srcFileSize + ", HDFS file size = " + destFileSize);
 
-        if (verifyCopy) {
+        if (config.isVerify()) {
             verify(stagingFile, crc.getValue());
         }
 
@@ -227,21 +191,15 @@ public class WorkerThread extends Thread {
             throw new IOException("Failed to rename file");
         }
 
-        if(createLzopIndex && destFile.getName().endsWith(lzopExt)) {
+        if(config.isCreateLzopIndex() && destFile.getName().endsWith(lzopExt)) {
             indexer.index(destFile);
-        }
-
-        if (createDoneFile) {
-            Path doneFile = new Path(destFile.getParent(), destFile.getName() + ".done");
-            log.info("Touching done file " + doneFile);
-            touch(doneFile);
         }
 
         fileSystemManager.fileCopyComplete(srcFileStatus);
     }
 
     private Path stageSource(FileStatus srcFile) throws IOException {
-        Path p = new Path(ScriptExecutor.getStdOutFromScript(workScriptFile, srcFile.getPath().toString(), 60, TimeUnit.SECONDS));
+        Path p = new Path(ScriptExecutor.getStdOutFromScript(config.getWorkScript(), srcFile.getPath().toString(), 60, TimeUnit.SECONDS));
         if (p.toUri().getScheme() == null) {
             throw new IOException("Work path from script must be a URI with a scheme: '" + p + "'");
         }
@@ -263,9 +221,9 @@ public class WorkerThread extends Thread {
         InputStream in = null;
         CRC32 crc = new CRC32();
         try {
-            InputStream is = new BufferedInputStream(path.getFileSystem(config).open(path));
-            if (codec != null) {
-                is = codec.createInputStream(is);
+            InputStream is = new BufferedInputStream(path.getFileSystem(config.getConfig()).open(path));
+            if (config.getCodec() != null) {
+                is = config.getCodec().createInputStream(is);
             }
             in = new CheckedInputStream(is, crc);
             org.apache.commons.io.IOUtils.copy(in, new NullOutputStream());
@@ -275,16 +233,12 @@ public class WorkerThread extends Thread {
         return crc.getValue();
     }
 
-    private void touch(Path p) throws IOException {
-        p.getFileSystem(config).create(p).close();
-    }
-
     private Path getHdfsTargetPath(FileStatus srcFile) throws IOException {
-        if (fileSystemManager.getDestinationDirectory() != null) {
-            if (codec != null) {
-                return new Path(fileSystemManager.getDestinationDirectory(), srcFile.getPath().getName() + codec.getDefaultExtension());
+        if (config.getDestDir() != null) {
+            if (config.getCodec() != null) {
+                return new Path(config.getDestDir(), srcFile.getPath().getName() + config.getCodec().getDefaultExtension());
             } else {
-                return new Path(fileSystemManager.getDestinationDirectory(), srcFile.getPath().getName());
+                return new Path(config.getDestDir(), srcFile.getPath().getName());
             }
         } else {
             return getDestPathFromScript(srcFile);
@@ -292,7 +246,7 @@ public class WorkerThread extends Thread {
     }
 
     private Path getDestPathFromScript(FileStatus srcFile) throws IOException {
-        Path p = new Path(ScriptExecutor.getStdOutFromScript(scriptFile, srcFile.getPath().toString(), 60, TimeUnit.SECONDS));
+        Path p = new Path(ScriptExecutor.getStdOutFromScript(config.getScript(), srcFile.getPath().toString(), 60, TimeUnit.SECONDS));
         if (p.toUri().getScheme() == null) {
             throw new IOException("Destination path from script must be a URI with a scheme: '" + p + "'");
         }

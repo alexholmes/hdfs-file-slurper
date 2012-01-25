@@ -19,6 +19,10 @@
 #
 # This script is customized to work nice with inittab respawn.
 #
+# Be warned that if you launch this in a console window and Ctrl+C
+# the process, the child Java process will still be running in the
+# background.
+#
 ##########################################################################
 
 # resolve links - $0 may be a softlink
@@ -42,5 +46,10 @@ cd $BASEDIR
 
 . $BASEDIR/bin/base
 
-"$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/normal/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@"
+date=`date +"%Y%m%d-%H%M%S"`
+outfile=$BASEDIR/logs/slurper-$date.out
 
+nohup "$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/daemon/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" &> $outfile < /dev/null &
+PID="$!"
+trap "kill $PID" SIGTERM
+wait
