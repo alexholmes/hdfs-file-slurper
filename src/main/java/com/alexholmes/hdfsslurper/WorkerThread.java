@@ -164,7 +164,7 @@ public class WorkerThread extends Thread {
           os = config.getCodec().createOutputStream(os);
         }
 
-        IOUtils.copyBytes(is, os, 4096, true);
+        IOUtils.copyBytes(is, os, 4096, false);
       } finally {
         IOUtils.closeStream(is);
         IOUtils.closeStream(os);
