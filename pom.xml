@@ -48,12 +48,6 @@
     <repositories>
 
         <repository>
-            <id>central</id>
-            <name>libs-release</name>
-            <url>https://repository.cloudera.com/artifactory/libs-release</url>
-        </repository>
-
-        <repository>
           <id>hadoop-non-releases</id>
           <name>Hadoop non-releases</name>
           <url>http://alexholmes.github.com/hadoop-book-mvn-repo/repository/releases/</url>
@@ -106,15 +100,9 @@
         </dependency>
 
         <dependency>
-            <groupId>org.mortbay.jetty</groupId>
-            <artifactId>jetty</artifactId>
-            <version>${jetty.version}</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-core</artifactId>
-            <version>0.20.2-cdh3u2</version>
+            <version>1.2.1</version>
         </dependency>
 
         <dependency>
@@ -127,7 +115,7 @@
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-test</artifactId>
-            <version>0.20.2-cdh3u2</version>
+            <version>1.2.1</version>
             <scope>test</scope>
         </dependency>
 
@@ -268,39 +256,6 @@
             </plugin>
 
         </plugins>
-
-        <!-- the following m2e settings fix the Eclipse error:
-             "maven-dependency-plugin (goals "copy-dependencies", "unpack")
-             is not supported by m2e."
-        -->
-        <pluginManagement>
-            <plugins>
-                <plugin>
-                    <groupId>org.eclipse.m2e</groupId>
-                    <artifactId>lifecycle-mapping</artifactId>
-                    <version>1.0.0</version>
-                    <configuration>
-                        <lifecycleMappingMetadata>
-                            <pluginExecutions>
-                                <pluginExecution>
-                                    <pluginExecutionFilter>
-                                        <groupId>org.apache.maven.plugins</groupId>
-                                        <artifactId>maven-dependency-plugin</artifactId>
-                                        <versionRange>[2.0,)</versionRange>
-                                        <goals>
-                                            <goal>copy-dependencies</goal>
-                                        </goals>
-                                    </pluginExecutionFilter>
-                                    <action>
-                                        <execute />
-                                    </action>
-                                </pluginExecution>
-                            </pluginExecutions>
-                        </lifecycleMappingMetadata>
-                    </configuration>
-                </plugin>
-            </plugins>
-        </pluginManagement>
 
     </build>
 
