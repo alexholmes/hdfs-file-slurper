@@ -42,14 +42,14 @@ BASEDIR=`dirname ${PRG}`
 BASEDIR=`cd ${BASEDIR}/..;pwd`
 SCRIPT=`basename ${PRG}`
 
-cd $BASEDIR
+cd ${BASEDIR}
 
-. $BASEDIR/bin/base
+. ${BASEDIR}/bin/base
 
 date=`date +"%Y%m%d-%H%M%S"`
 outfile=$BASEDIR/logs/slurper-$date.out
 
-nohup "$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/daemon/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@" &> $outfile < /dev/null &
+nohup ${HADOOP_BIN} com.alexholmes.hdfsslurper.Slurper "$@" --log4j-file ${BASEDIR}/conf/daemon/log4j.properties &> $outfile < /dev/null &
 PID="$!"
 trap "kill $PID" SIGTERM
 wait

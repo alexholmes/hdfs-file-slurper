@@ -5,7 +5,7 @@
     <groupId>com.alexholmes</groupId>
     <artifactId>hdfs-slurper</artifactId>
     <name>HDFS File Slurper</name>
-    <version>0.1.6</version>
+    <version>0.1.7</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -33,7 +33,7 @@
     </properties>
 
     <description>
-        A simple utility to copy files from a local file system into HDFS, and vice-versa
+        A simple utility to copy files from a local file system into HDFS, and vice-versa.
     </description>
 
     <developers>
@@ -49,8 +49,8 @@
 
         <repository>
           <id>hadoop-non-releases</id>
-          <name>Hadoop non-releases</name>
-          <url>http://alexholmes.github.com/hadoop-book-mvn-repo/repository/releases/</url>
+          <name>Twitter Maven Repo</name>
+          <url>http://maven.twttr.com/</url>
           <releases>
             <enabled>true</enabled>
           </releases>
@@ -101,14 +101,21 @@
 
         <dependency>
             <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-core</artifactId>
-            <version>1.2.1</version>
+            <artifactId>hadoop-common</artifactId>
+            <version>2.2.0</version>
+            <scope>compile</scope>
         </dependency>
 
         <dependency>
-          <groupId>com.hadoop.compression.lzo</groupId>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-hdfs</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+
+        <dependency>
+          <groupId>com.hadoop.gplcompression</groupId>
           <artifactId>hadoop-lzo</artifactId>
-          <version>0.4.14</version>
+          <version>0.4.19</version>
           <scope>compile</scope>
         </dependency>
 

@@ -9,12 +9,7 @@
 ##########################################################
 
 
-# Set the directory for the local Java installation
+# The location of the main hadoop script
 #
-# export JAVA_HOME=/usr/java/latest
-
-
-# Set the directory for the local Hadoop installation
-#
-# export HADOOP_HOME=/usr/local/hadoop
+export HADOOP_BIN=/usr/local/hadoop/bin/hadoop
 

@@ -41,7 +41,10 @@
             <directory>target/lib</directory>
             <outputDirectory>lib</outputDirectory>
             <includes>
-                <include>*.jar</include>
+                <include>commons*.jar</include>
+                <include>log4j*.jar</include>
+                <include>slf4j*.jar</include>
+                <include>hadoop-lzo*.jar</include>
             </includes>
         </fileSet>
         <fileSet>

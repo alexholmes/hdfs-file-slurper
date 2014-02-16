@@ -38,9 +38,9 @@ BASEDIR=`dirname ${PRG}`
 BASEDIR=`cd ${BASEDIR}/..;pwd`
 SCRIPT=`basename ${PRG}`
 
-cd $BASEDIR
+cd ${BASEDIR}
 
-. $BASEDIR/bin/base
+. ${BASEDIR}/bin/base
 
-"$JAVA" $JAVA_HEAP_MAX -Dslurper.log4j.properties=${BASEDIR}/conf/normal/log4j.properties -Djava.library.path=${JAVA_LIBRARY_PATH} -classpath "$CLASSPATH" com.alexholmes.hdfsslurper.Slurper "$@"
+${HADOOP_BIN} com.alexholmes.hdfsslurper.Slurper "$@" --log4j-file ${BASEDIR}/conf/normal/log4j.properties
 

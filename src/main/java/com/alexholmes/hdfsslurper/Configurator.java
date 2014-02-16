@@ -57,10 +57,10 @@ public class Configurator {
 
   private static Log log = LogFactory.getLog(Configurator.class);
 
-  public static Config loadAndVerify(String path) throws IOException, MissingRequiredConfigException, ClassNotFoundException, MutuallyExclusiveConfigsExist, ConfigSettingException, FileSystemMkdirFailed, NoMutuallyExclusiveConfigsExist {
+  public static Config loadAndVerify(Configuration config, String path) throws IOException, MissingRequiredConfigException, ClassNotFoundException, MutuallyExclusiveConfigsExist, ConfigSettingException, FileSystemMkdirFailed, NoMutuallyExclusiveConfigsExist {
     Map<String, String> props = loadProperties(path);
 
-    Config c = load(props);
+    Config c = load(config, props);
 
     // make sure the mutually exclusive config names are flagged
     //
@@ -75,13 +75,12 @@ public class Configurator {
     return c;
   }
 
-  public static Config load(Map<String, String> props) throws IOException, MissingRequiredConfigException, ClassNotFoundException {
+  public static Config load(Configuration config, Map<String, String> props) throws IOException, MissingRequiredConfigException, ClassNotFoundException {
     Config c = new Config();
 
     // set the Hadoop config
     //
-    Configuration conf = new Configuration();
-    c.setConfig(conf);
+    c.setConfig(config);
 
     // datasource name
     //
@@ -98,9 +97,9 @@ public class Configurator {
 
     // setup the file systems
     //
-    c.setSrcFs(c.getSrcDir().getFileSystem(conf));
+    c.setSrcFs(c.getSrcDir().getFileSystem(config));
     if(c.getDestDir() != null) {
-      c.setDestFs(c.getDestDir().getFileSystem(conf));
+      c.setDestFs(c.getDestDir().getFileSystem(config));
     }
 
     // compression
@@ -108,7 +107,7 @@ public class Configurator {
     String compressionCodec = getConfigValue(props, ConfigNames.COMPRESSION_CODEC);
     if (compressionCodec != null) {
       c.setCodec((CompressionCodec)
-          ReflectionUtils.newInstance(Class.forName(compressionCodec), conf));
+          ReflectionUtils.newInstance(Class.forName(compressionCodec), config));
     }
     c.setCreateLzopIndex(isOptionEnabled(props, ConfigNames.CREATE_LZO_INDEX));
 

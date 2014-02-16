@@ -7,7 +7,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.log4j.Level;
 import org.junit.Test;
@@ -15,7 +14,6 @@ import org.junit.Test;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.CRC32;
@@ -35,13 +33,10 @@ public class WorkerThreadTest {
     ).getLogger().setLevel(Level.OFF);
   }
 
-  static final URI LOCAL_FS = URI.create("file:///");
-
   private static String TEST_ROOT_DIR =
       new Path(System.getProperty("test.build.data", "/tmp")).toString().replace(' ', '+');
 
   private static final Random RAN = new Random();
-
 
   public static class TestFile {
     protected Path path;
@@ -90,69 +85,60 @@ public class WorkerThreadTest {
 
   @Test
   public void testCopyFromLocalToDfs() throws Exception {
-    MiniDFSCluster cluster = null;
-    try {
-      Configuration conf = new Configuration();
-      cluster = new MiniDFSCluster(conf, 1, true, null);
-      final FileSystem hdfs = cluster.getFileSystem();
-      final FileSystem localfs = FileSystem.get(LOCAL_FS, conf);
-      final String namenode = hdfs.getUri().toString();
-      System.out.println("NN = " + namenode);
-      if (namenode.startsWith("hdfs://")) {
+    Configuration conf = new Configuration();
+    final FileSystem srcFs = FileSystem.getLocal(conf);
+    final FileSystem destFs = FileSystem.getLocal(conf);
+    final String namenode = destFs.getUri().toString();
+    System.out.println("NN = " + namenode);
+    if (namenode.startsWith("hdfs://")) {
 
-        Path localBaseDir = localfs.makeQualified(new Path(TEST_ROOT_DIR, "test-slurper"));
+      Path localBaseDir = srcFs.makeQualified(new Path(TEST_ROOT_DIR, "test-slurper"));
 
-        System.out.println(localBaseDir.toString());
+      System.out.println(localBaseDir.toString());
 
 
-        Path localInDir = new Path(localBaseDir, "in");
-        Path localWorkDir = new Path(localBaseDir, "work");
-        Path localErrorDir = new Path(localBaseDir, "error");
-        Path localCompleteDir = new Path(localBaseDir, "completed");
+      Path localInDir = new Path(localBaseDir, "in");
+      Path localWorkDir = new Path(localBaseDir, "work");
+      Path localErrorDir = new Path(localBaseDir, "error");
+      Path localCompleteDir = new Path(localBaseDir, "completed");
 
-        localfs.delete(localBaseDir, true);
+      srcFs.delete(localBaseDir, true);
 
-        localfs.mkdirs(localInDir);
+      srcFs.mkdirs(localInDir);
 
-        Path localInFile = new Path(localInDir, "test-file");
-        TestFile inFile = new TestFile(localfs, localInFile);
-
-
-        Path hdfsBaseDir = hdfs.makeQualified(new Path("/tmp", "test-slurper"));
-        Path hdfsDestDir = new Path(hdfsBaseDir, "out");
-        Path hdfsStageDir = new Path(hdfsBaseDir, "stage");
-
-        System.out.println(hdfsBaseDir.toString());
-
-        Config c = new Config();
-        c.setSrcDir(localInDir)
-            .setWorkDir(localWorkDir)
-            .setErrorDir(localErrorDir)
-            .setCompleteDir(localCompleteDir)
-            .setDestDir(hdfsDestDir)
-            .setDestStagingDir(hdfsStageDir)
-            .setPollSleepPeriodMillis(1000)
-            .setSrcFs(localfs)
-            .setDestFs(hdfs);
+      Path localInFile = new Path(localInDir, "test-file");
+      TestFile inFile = new TestFile(srcFs, localInFile);
 
 
-        FileSystemManager fsm = new FileSystemManager(c);
+      Path hdfsBaseDir = destFs.makeQualified(new Path("/tmp", "test-slurper"));
+      Path hdfsDestDir = new Path(hdfsBaseDir, "out");
+      Path hdfsStageDir = new Path(hdfsBaseDir, "stage");
 
-        WorkerThread wt = new WorkerThread(c, fsm, TimeUnit.MILLISECONDS, 1);
+      System.out.println(hdfsBaseDir.toString());
 
-        wt.doWork();
+      Config c = new Config();
+      c.setSrcDir(localInDir)
+          .setWorkDir(localWorkDir)
+          .setErrorDir(localErrorDir)
+          .setCompleteDir(localCompleteDir)
+          .setDestDir(hdfsDestDir)
+          .setDestStagingDir(hdfsStageDir)
+          .setPollSleepPeriodMillis(1000)
+          .setSrcFs(srcFs)
+          .setDestFs(destFs);
 
-        Path expectedDestinationFile = new Path(hdfsDestDir, localInFile.getName());
 
-        assertTrue("File doesn't exist '" + expectedDestinationFile.toUri() + "'", hdfs.exists(expectedDestinationFile));
+      FileSystemManager fsm = new FileSystemManager(c);
 
-        assertEquals(inFile.getCRC32(), hdfsFileCRC32(hdfs, null, expectedDestinationFile));
+      WorkerThread wt = new WorkerThread(c, fsm, TimeUnit.MILLISECONDS, 1);
 
-      }
-    } finally {
-      if (cluster != null) {
-        cluster.shutdown();
-      }
+      wt.doWork();
+
+      Path expectedDestinationFile = new Path(hdfsDestDir, localInFile.getName());
+
+      assertTrue("File doesn't exist '" + expectedDestinationFile.toUri() + "'", destFs.exists(expectedDestinationFile));
+
+      assertEquals(inFile.getCRC32(), hdfsFileCRC32(destFs, null, expectedDestinationFile));
     }
   }
 

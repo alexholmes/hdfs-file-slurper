@@ -20,6 +20,10 @@ import org.apache.commons.cli.*;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.conf.Configured;
+import org.apache.hadoop.util.Tool;
+import org.apache.hadoop.util.ToolRunner;
 import org.apache.log4j.PropertyConfigurator;
 
 import java.io.FileInputStream;
@@ -31,9 +35,10 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Slurper {
+public class Slurper extends Configured implements Tool {
   private static Log log = LogFactory.getLog(Slurper.class);
   public static final String ARGS_CONFIG_FILE = "config-file";
+  public static final String ARGS_LOG4J_FILE = "log4j-file";
 
   private Config config;
 
@@ -55,10 +60,11 @@ public class Slurper {
 
     Options options = new Options();
     options.addOption("o", ARGS_CONFIG_FILE, true, "The configuration file (required). ");
+    options.addOption("o", ARGS_LOG4J_FILE, true, "The log4j file (required). ");
 
     CommandLine commandLine;
     try {
-      commandLine = new PosixParser().parse(options, args);
+      commandLine = new PosixParser().parse(options, args, false);
     } catch (ParseException e) {
       log.error("Could not parse command line args: " + e.getMessage());
       System.err.println("Could not parse command line args: " + e.getMessage());
@@ -72,31 +78,38 @@ public class Slurper {
       printUsageAndExit(options, 2);
     }
 
-    try {
-      config = Configurator.loadAndVerify(path);
-    } catch (Configurator.MissingRequiredConfigException e) {
-      printErrorAndExit("Missing required option in config file: " + e.getKey(), 3);
-    } catch (Configurator.MutuallyExclusiveConfigsExist e2) {
-      printErrorAndExit("Mutually exclusive options are both set (only one should be set): " + e2.getKey1() +
-      ", " + e2.getKey2(), 4);
-    } catch (Configurator.ConfigSettingException e) {
-      printErrorAndExit(e.getMessage(), 5);
-    } catch (Configurator.FileSystemMkdirFailed e3) {
-      printErrorAndExit(e3.getMessage(), 6);
-    } catch (Configurator.NoMutuallyExclusiveConfigsExist e4) {
-      printErrorAndExit("One of these mutually exclusive options must be set: " + e4.getKey1() +
-          ", " + e4.getKey2(), 7);
+    String log4jPath = commandLine.getOptionValue(ARGS_LOG4J_FILE);
+    if (log4jPath == null) {
+      System.err.println("Missing required argument " + ARGS_LOG4J_FILE);
+      printUsageAndExit(options, 3);
     }
 
-    setupLog4j(config.getDatasource());
+    System.out.println("Conf = " + getConf());
+
+    try {
+      config = Configurator.loadAndVerify(getConf(), path);
+    } catch (Configurator.MissingRequiredConfigException e) {
+      printErrorAndExit("Missing required option in config file: " + e.getKey(), 10);
+    } catch (Configurator.MutuallyExclusiveConfigsExist e2) {
+      printErrorAndExit("Mutually exclusive options are both set (only one should be set): " + e2.getKey1() +
+          ", " + e2.getKey2(), 11);
+    } catch (Configurator.ConfigSettingException e) {
+      printErrorAndExit(e.getMessage(), 12);
+    } catch (Configurator.FileSystemMkdirFailed e3) {
+      printErrorAndExit(e3.getMessage(), 13);
+    } catch (Configurator.NoMutuallyExclusiveConfigsExist e4) {
+      printErrorAndExit("One of these mutually exclusive options must be set: " + e4.getKey1() +
+          ", " + e4.getKey2(), 14);
+    }
+
+    setupLog4j(log4jPath, config.getDatasource());
   }
 
-  private void setupLog4j(String datasourceName) throws IOException {
-    String propFile = System.getProperty("slurper.log4j.properties");
+  private void setupLog4j(String log4jPath, String datasourceName) throws IOException {
     Properties p = new Properties();
     InputStream is = null;
     try {
-      is = new FileInputStream(propFile);
+      is = new FileInputStream(log4jPath);
       p.load(is);
       p.put("log.datasource", datasourceName); // overwrite "log.dir"
       PropertyConfigurator.configure(p);
@@ -151,15 +164,34 @@ public class Slurper {
     programmaticShutdown.set(true);
   }
 
-  public static void main(String... args) {
+  /**
+   * Main entry point.
+   *
+   * @param args arguments
+   * @throws Exception when something goes wrong
+   */
+  public static void main(final String[] args) throws Exception {
+    Slurper slurper = new Slurper();
+    int res = ToolRunner.run(new Configuration(), slurper, args);
+    System.exit(res);
+  }
+
+  /**
+   * The MapReduce driver - setup and launch the job.
+   *
+   * @param args the command-line arguments
+   * @return the process exit code
+   * @throws Exception if something goes wrong
+   */
+  public int run(final String[] args) throws Exception {
     try {
-      Slurper slurper = new Slurper();
-      slurper.configure(args);
-      slurper.run();
+      configure(args);
+      run();
+      return 0;
     } catch (Throwable t) {
       log.error("Caught exception in main()", t);
       t.printStackTrace();
-      System.exit(1000);
+      return 1000;
     }
   }
 }

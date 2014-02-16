@@ -40,7 +40,7 @@ public class Config {
   private long pollSleepPeriodMillis;
   FileSystem srcFs;
   FileSystem destFs;
-  Configuration config = new Configuration();
+  Configuration config;
 
 
   public String getDatasource() {
