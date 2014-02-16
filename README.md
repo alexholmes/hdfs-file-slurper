@@ -52,7 +52,7 @@ To get started, simply:
 
 1. Download, and run `mvn package`
 2. Copy the generated tarball under `target/` to a machine that has access to Hadoop, and untar.
-3. Edit `conf/slurper-env.sh` to set your Java and Hadoop home directories
+3. Edit `conf/slurper-env.sh` to set the location of your Hadoop script
 4. Edit `conf/slurper.conf` and set the properties for your environment
 5. Run!
 
