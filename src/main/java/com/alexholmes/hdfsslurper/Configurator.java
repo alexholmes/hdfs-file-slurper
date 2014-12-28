@@ -221,25 +221,7 @@ public class Configurator {
     if (!uri1.getScheme().equals(uri2.getScheme())) {
       return false;
     }
-    String srcHost = uri1.getHost();
-    String dstHost = uri2.getHost();
-    if ((srcHost != null) && (dstHost != null)) {
-      try {
-        srcHost = InetAddress.getByName(srcHost).getCanonicalHostName();
-        dstHost = InetAddress.getByName(dstHost).getCanonicalHostName();
-      } catch (UnknownHostException ue) {
-        return false;
-      }
-      if (!srcHost.equals(dstHost)) {
-        return false;
-      }
-    } else if (srcHost == null && dstHost != null) {
-      return false;
-    } else if (srcHost != null) {
-      return false;
-    }
-    //check for ports
-    return uri1.getPort() == uri2.getPort();
+    return uri1.equals(uri2);
   }
 
   public static void testCreateDir(Path p, Configuration conf) throws IOException, ConfigSettingException, FileSystemMkdirFailed {
