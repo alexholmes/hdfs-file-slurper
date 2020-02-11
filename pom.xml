@@ -50,7 +50,7 @@
         <repository>
           <id>hadoop-non-releases</id>
           <name>Twitter Maven Repo</name>
-          <url>http://maven.twttr.com/</url>
+          <url>https://maven.twttr.com/</url>
           <releases>
             <enabled>true</enabled>
           </releases>
